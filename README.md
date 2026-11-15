@@ -2,7 +2,17 @@
 
 A shared golf competition scoring app. Set up the course card and the field, let each group enter scores hole by hole from their phones, and follow a live leaderboard.
 
-Live version: https://claude.ai/artifact/RGRfwn14mT4kq9UMLQrkES (shared through the page's Share menu; players need Contributor access to enter scores).
+Live version: https://hatleyowen.github.io/tussock-scoring/ (GitHub Pages + Firebase).
+
+The earlier claude.ai artifact version (https://claude.ai/artifact/RGRfwn14mT4kq9UMLQrkES) is kept as a fallback.
+
+## Who can do what
+
+- **Anyone with the link** can see competitions, leaderboards and scorecards. No sign-in.
+- **Players and markers** unlock score entry for one competition by typing its **competition code** on the *Enter scores* tab. They only need to do this once per phone. They can enter scores in that competition and nothing else.
+- **Organisers** use *Organiser sign in* (Google) to create competitions, edit the course and field, see codes and delete things. To add an organiser, have them sign in once: the page shows their account ID. Then create a document `admins/<account ID>` in the Firestore console (any field, e.g. `addedAt`).
+
+Scores entered without signal are kept on the phone and sent when it reconnects.
 
 ## Formats
 
@@ -24,11 +34,21 @@ A stroke play or Stableford competition can also run a **pairs competition (bett
 
 ## How it's built
 
-A single file, `tussock-scoring.html`: plain HTML, CSS and JavaScript, with no build step.
+Plain HTML, CSS and JavaScript with no build step, served by GitHub Pages:
 
-Shared data uses the claude.ai Artifact runtime (`claude.use("db")` and `claude.use("user")`):
+- `index.html`: the whole app. Firebase is loaded from Google's CDN.
+- `firebase-config.js`: the Firebase web app settings (not secret).
+- `firestore.rules`: the database access rules. Paste them into Firestore → Rules in the Firebase console and publish after any change.
+- `scripts/import-artifact-export.mjs`: one-off import of the old artifact data (see the comments at the top).
+
+Data lives in Cloud Firestore (project `tussock-scoring`, Sydney region):
 
 - `comps/{compId}`: competition settings, course card (`pars`, `si`, `rating`, `slope`) and the optional pairs game (`teams: {enabled, allowance}`)
-- `comps/{compId}/players/{entryId}`: entry name, handicap index, NZ Golf member number (`golfNo`, optional), pair/team, and `scores` as a map of hole number to strokes (or `"P"` for a pickup)
+- `comps/{compId}/players/{entryId}`: entry name, handicap index, NZ Golf member number (`golfNo`, optional), pair/team, and `scores` as a map of hole number to strokes (or `"P"` for a pickup). Scores are saved one hole at a time, so markers on different phones don't overwrite each other.
+- `comps/{compId}/members/{uid}`: phones that entered the competition code
+- `secrets/{compId}`: `{code}`, the competition code. Only organisers can read it.
+- `admins/{uid}`: the organiser list
 
-If you open the file directly in a browser, there's no database, so only the in-memory sample round works. To run it standalone you'd swap the `db` calls for another backend (for example Firebase, Supabase or a small API).
+To test locally, serve the folder over `http://localhost` (for example `npx serve .`). Opening `index.html` straight from disk won't work because the page uses JavaScript modules.
+
+Never commit a Firebase service account key; `.gitignore` excludes the usual file names.
