@@ -175,6 +175,13 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
 .join label.f{flex:1 1 180px}
 #j-code{font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.08em}
 .uid{font-family:var(--f-mono);font-size:12px;user-select:all;overflow-wrap:anywhere}
+.cinfo{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:0}
+.cinfo dt{font-size:13px;font-weight:600;color:var(--muted)}
+.cinfo dd{margin:2px 0 0;font-size:16px;font-weight:500}
+.course.ro{table-layout:fixed}
+.course.ro th.lbl{width:60px}
+.course.ro td{padding:6px 2px;font-variant-numeric:tabular-nums}
+.course.ro td.tot,.course.ro th:nth-child(11),.course.ro th:nth-child(21),.course.ro th:nth-child(22){font-weight:700;background:var(--sunk)}
 </style>
 </head>
 <body>
@@ -428,7 +435,7 @@ function render(fromSnapshot){
   if(S.view==="new")return fromSnapshot?null:renderCompForm(app,null);
   const comp=curComp();
   if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">All competitions</a></div></div>':'<p class="muted">Loading competition…</p>';return}
-  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);return}
+  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
   if(fromSnapshot&&document.activeElement&&document.activeElement.id==="j-code")return;/* don't wipe a code being typed */
   renderComp(app,comp);
 }
@@ -606,11 +613,33 @@ function renderSetup(tab,comp){
   h+='</div>';
   if(canAdmin()){
     h+='<div class="panel stack"><h2>Competition &amp; course</h2><div id="cform-host"></div></div>';
-  }
+  }else h+=courseView(comp);
   h+='</div>';
   tab.innerHTML=h;
   renderEntryList(comp);
   if(canAdmin()){compForm($("#cform-host"),comp);bindEntryForm(comp)}
+}
+/* Read-only course card for everyone who isn't an organiser. */
+function courseView(comp){
+  const c=comp.course,pt=(a,b)=>sum(c.pars.slice(a,b));
+  let h='<div class="panel stack" id="courseView"><h2>Course</h2><dl class="cinfo">';
+  h+='<div><dt>Course and tees</dt><dd>'+esc(c.name||"–")+'</dd></div>';
+  h+='<div><dt>Course rating</dt><dd class="num">'+esc(c.rating)+'</dd></div>';
+  h+='<div><dt>Slope rating</dt><dd class="num">'+esc(c.slope)+'</dd></div></dl>';
+  h+='<div><div class="eyebrow" style="margin-bottom:6px">Card: par and stroke index</div><div class="course-wrap"><table class="course ro"><thead><tr><th class="lbl">Hole</th>';
+  for(let k=1;k<=9;k++)h+='<th>'+k+'</th>';
+  h+='<th>Out</th>';
+  for(let k=10;k<=18;k++)h+='<th>'+k+'</th>';
+  h+='<th>In</th><th>Tot</th></tr></thead><tbody><tr><td class="lbl">Par</td>';
+  for(let k=0;k<9;k++)h+='<td>'+c.pars[k]+'</td>';
+  h+='<td class="tot">'+pt(0,9)+'</td>';
+  for(let k=9;k<18;k++)h+='<td>'+c.pars[k]+'</td>';
+  h+='<td class="tot">'+pt(9,18)+'</td><td class="tot">'+pt(0,18)+'</td></tr><tr><td class="lbl">S.I.</td>';
+  for(let k=0;k<9;k++)h+='<td>'+c.si[k]+'</td>';
+  h+='<td class="tot"></td>';
+  for(let k=9;k<18;k++)h+='<td>'+c.si[k]+'</td>';
+  h+='<td class="tot"></td><td class="tot"></td></tr></tbody></table></div></div></div>';
+  return h;
 }
 function renderEntryList(comp){
   const el=$("#elist");if(!el)return;
