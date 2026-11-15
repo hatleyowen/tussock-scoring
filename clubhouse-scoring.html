@@ -1,0 +1,667 @@
+<title>Clubhouse Scoring</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a club's manual leaderboard — condensed board type, under-par in red, scorecard grid underneath; one centred column, tabs per competition. */
+:root{
+  --bg:#F3F5EF; --surface:#FFFFFF; --sunk:#E8ECE3; --fg:#18221C; --muted:#5D6B61; --line:#D3DACD;
+  --accent:#1E5B3A; --accent-fg:#FFFFFF; --accent-soft:#DCEADF;
+  --under:#C4271F; --over:#18221C; --warn:#9A6400;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1512; --surface:#18211C; --sunk:#202B25; --fg:#E5ECE6; --muted:#97A69C; --line:#2E3B33;
+  --accent:#6CC294; --accent-fg:#0F1512; --accent-soft:#1E3529; --under:#FF7066; --over:#E5ECE6; --warn:#E3B04B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1512; --surface:#18211C; --sunk:#202B25; --fg:#E5ECE6; --muted:#97A69C; --line:#2E3B33;
+  --accent:#6CC294; --accent-fg:#0F1512; --accent-soft:#1E3529; --under:#FF7066; --over:#E5ECE6; --warn:#E3B04B; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+*{box-sizing:border-box}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:18px 10px;flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);text-decoration:none;display:flex;align-items:center;gap:10px}
+.brand svg{flex:none}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:clamp(30px,6vw,44px);letter-spacing:.01em}
+h2{font-size:24px}
+h3{font-size:18px;letter-spacing:.02em}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+button,.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:var(--r);padding:8px 14px;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none}
+button:hover,.btn:hover{border-color:var(--muted)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary,.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+button.danger{color:var(--under);border-color:var(--under);background:transparent}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;min-height:40px;width:100%;min-width:0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted);min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.note{font-size:13px;color:var(--muted)}
+.banner{border:1px dashed var(--line);border-radius:10px;padding:12px 14px;font-size:14px;background:var(--sunk)}
+.banner.sample{border-color:var(--warn);color:var(--fg)}
+.pill{display:inline-flex;align-items:center;font-size:12px;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.pill.warn{background:transparent;border:1px solid var(--warn);color:var(--warn)}
+.pill.live{background:var(--under);color:#fff}
+
+/* Competition list */
+.comps{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.comp-card{display:flex;flex-direction:column;gap:6px;text-align:left;align-items:flex-start;padding:16px;min-height:0;border-radius:10px}
+.comp-card .t{font-family:var(--f-display);font-size:22px;font-weight:700;line-height:1.1}
+.empty{padding:28px;text-align:left}
+
+/* Comp header + tabs */
+.comp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;padding-block:8px 14px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
+.tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;color:var(--muted);font-family:var(--f-display);font-size:18px;letter-spacing:.04em;text-transform:uppercase;padding:8px 14px}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+
+/* Leaderboard */
+.board-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:520px}
+.board th{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--sunk)}
+.board th:nth-child(2),.board td:nth-child(2){text-align:left}
+.board td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
+.board tr.ent{cursor:pointer}
+.board tr.ent:hover td{background:var(--sunk)}
+.board .pos{font-family:var(--f-display);font-weight:700;font-size:22px;width:56px;text-align:left}
+.board .nm{font-weight:600}
+.board .sub{font-size:12px;color:var(--muted);font-weight:400}
+.board .big{font-family:var(--f-display);font-weight:700;font-size:26px;line-height:1}
+.u{color:var(--under)} .o{color:var(--over)}
+.cb{font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--muted);vertical-align:super;margin-left:3px}
+.board tr.card-row td{padding:0 0 12px;background:var(--surface)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{border:none;border-radius:0;min-height:34px;padding:4px 12px;background:var(--surface);color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+
+/* Scorecard grid */
+.sc-wrap{overflow-x:auto;padding:0 12px}
+table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px;min-width:720px;width:100%}
+.sc th,.sc td{border:1px solid var(--line);text-align:center;padding:4px 2px;min-width:30px}
+.sc th{font-weight:600;color:var(--muted);background:var(--sunk);font-size:11px}
+.sc td.lbl,.sc th.lbl{text-align:left;padding-inline:8px;min-width:64px;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.sc td.tot{font-weight:700;background:var(--sunk)}
+.mk{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;font-weight:600}
+.mk.eagle{border-radius:50%;box-shadow:0 0 0 1.5px var(--under),0 0 0 3.5px var(--surface),0 0 0 5px var(--under);color:var(--under)}
+.mk.birdie{border-radius:50%;box-shadow:0 0 0 1.5px var(--under);color:var(--under)}
+.mk.bogey{box-shadow:0 0 0 1.5px var(--fg)}
+.mk.dbl{box-shadow:0 0 0 1.5px var(--fg),0 0 0 3.5px var(--surface),0 0 0 5px var(--fg)}
+.dots{letter-spacing:1px;color:var(--accent);font-size:11px;line-height:1}
+
+/* Score entry */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border-radius:99px;min-height:36px;padding:4px 14px;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.holes{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.holes button{min-height:38px;padding:0;font-family:var(--f-display);font-size:18px;position:relative}
+.holes button.done{background:var(--accent-soft);border-color:var(--accent-soft)}
+.holes button[aria-current="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.hole-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hole-head .h{font-family:var(--f-display);font-weight:700;font-size:44px;line-height:1}
+.hole-head .meta{display:flex;gap:16px;font-family:var(--f-display);font-size:20px;font-weight:600;color:var(--muted)}
+.hole-head .meta b{color:var(--fg);font-size:28px}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding-block:12px;border-top:1px solid var(--line)}
+.prow .who{min-width:0}
+.prow .who .n{font-weight:600;overflow-wrap:anywhere}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:48px;height:48px;font-size:24px;padding:0}
+.stepper .val{width:56px;text-align:center;font-family:var(--f-display);font-weight:700;font-size:36px;line-height:1}
+.stepper .pk{width:auto;font-size:14px;padding:0 10px}
+.res{font-size:12px;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px);z-index:20}
+
+/* Setup */
+.course-wrap{overflow-x:auto}
+table.course{border-collapse:collapse;min-width:640px;width:100%}
+.course th,.course td{border:1px solid var(--line);padding:2px;text-align:center}
+.course th{font-size:11px;color:var(--muted);background:var(--sunk);padding:4px}
+.course input{min-height:32px;padding:2px;text-align:center;border:none;border-radius:0;background:transparent}
+.course td.lbl,.course th.lbl{text-align:left;padding-inline:8px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.elist{display:flex;flex-direction:column}
+.erow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding-block:10px;border-top:1px solid var(--line);flex-wrap:wrap}
+.erow .who{min-width:0;flex:1 1 180px}
+.err{color:var(--under);font-size:13px}
+@media (max-width:560px){
+  .holes button{min-height:34px;font-size:16px}
+  .stepper button{width:44px;height:44px}
+  .hole-head .h{font-size:36px}
+}
+@media (prefers-reduced-motion:no-preference){button{transition:background .12s,border-color .12s,color .12s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#home" aria-label="Clubhouse Scoring home">
+      <svg width="22" height="26" viewBox="0 0 22 26" aria-hidden="true"><path d="M4 1v24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M5 2l14 5-14 5z" fill="currentColor"/></svg>
+      Clubhouse Scoring
+    </a>
+    <span id="conn" class="note"></span>
+  </header>
+  <main id="app"></main>
+</div>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<script>
+(function(){
+"use strict";
+const PAR_DEFAULT=[4,4,3,5,4,4,3,4,5,4,3,5,4,4,4,3,4,5];
+const SI_DEFAULT=[7,11,17,1,5,9,15,13,3,8,16,2,10,4,14,18,12,6];
+const FORMATS={
+  stroke:{label:"Stroke play",scoring:"strokes",allowance:95,blurb:"Individual medal. Net and gross leaderboards."},
+  stableford:{label:"Stableford",scoring:"points",allowance:95,blurb:"Individual. Points per hole against your net score."},
+  betterball:{label:"Better-ball Stableford",scoring:"points",allowance:85,blurb:"Pairs. The better points score of the two counts on each hole."},
+  scramble:{label:"Team scramble",scoring:"strokes",allowance:100,blurb:"Each team plays one ball. Net stroke play off a team handicap."}
+};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LS={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+const S={db:null,user:null,dbState:"connecting",canWrite:null,canEdit:false,readOnly:false,
+  comps:[],compsLoaded:false,compsSlow:false,entries:{},entriesLoaded:{},
+  view:"home",compId:null,tab:"board",boardMode:"net",openCard:null,hole:1,editEntry:null,confirm:null};
+const pending={};
+
+/* ---------- sample competition (in memory only) ---------- */
+function mkScores(arr){const o={};arr.forEach((v,i)=>{if(v!=null)o[i+1]=v});return o}
+const SAMPLE={id:"sample",local:true,name:"Sample: November Medal",date:"2026-11-14",format:"stroke",allowance:95,
+  course:{name:"Sample course, white tees",slope:128,rating:71.4,pars:PAR_DEFAULT.slice(),si:SI_DEFAULT.slice()}};
+const SAMPLE_ENTRIES=[
+  {id:"s1",name:"A. Player",index:8.4,scores:mkScores([4,5,3,5,4,4,2,5,5,4,3,6,4,5,4,3,4,5])},
+  {id:"s2",name:"B. Player",index:14.2,scores:mkScores([5,4,4,6,5,4,3,5,5,5,4,5,4,5,5,3,5,6])},
+  {id:"s3",name:"C. Player",index:3.1,scores:mkScores([4,4,3,4,4,5,3,4,5,4,3,5,4,4,4,3])},
+  {id:"s4",name:"D. Player",index:21.6,scores:mkScores([6,5,4,6,5,6,4,5,7,5,4,6,"P",5,5,4,5,6])},
+  {id:"s5",name:"E. Player",index:11.0,scores:mkScores([5,4,3,5,5,4,3,5,6,4,4,5])}
+];
+
+/* ---------- handicap + scoring ---------- */
+const sum=a=>a.reduce((x,y)=>x+y,0);
+function coursePar(c){return sum(c.pars)}
+function playingHcp(e,comp){
+  const idx=Number(e.index)||0;
+  if(comp.format==="scramble")return Math.round(idx);
+  const c=comp.course;
+  const ch=Math.round(idx*(Number(c.slope)||113)/113+((Number(c.rating)||coursePar(c))-coursePar(c)));
+  return Math.round(ch*(Number(comp.allowance)||100)/100);
+}
+function holeStrokes(ph,si){
+  if(ph>=0)return Math.floor(ph/18)+(si<=ph%18?1:0);
+  const n=-ph;return -(Math.floor(n/18)+(si>18-(n%18)?1:0));
+}
+function scoreAt(e,h){const p=pending[e.id];const v=p&&p[h]!==undefined?p[h]:(e.scores||{})[h];return v===undefined?null:v}
+function evalEntry(e,comp){
+  const c=comp.course,ph=playingHcp(e,comp),holes=[];
+  let thru=0,gross=0,pts=0,netTP=0,grossTP=0,pickup=false;
+  for(let i=0;i<18;i++){
+    const par=c.pars[i],si=c.si[i],rec=holeStrokes(ph,si),v=scoreAt(e,i+1);
+    const h={par,si,rec,g:v,net:null,pts:null};
+    if(v==="P"){h.pts=0;pickup=true;thru++}
+    else if(typeof v==="number"){h.net=v-rec;h.pts=Math.max(0,2+par-h.net);gross+=v;pts+=h.pts;netTP+=h.net-par;grossTP+=v-par;thru++}
+    holes.push(h);
+  }
+  return {key:e.id,name:e.name,sub:e.members||"",e,ph,phLabel:String(ph),holes,thru,gross,pts,netTP,grossTP,pickup,complete:thru===18};
+}
+function teamRows(comp,entries){
+  const groups=new Map();
+  entries.forEach(e=>{const k=(e.team||"").trim()||("Unpaired: "+e.name);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(evalEntry(e,comp))});
+  return [...groups].map(([name,evs])=>{
+    const holes=[];let thru=0,pts=0;
+    for(let i=0;i<18;i++){
+      const vals=evs.map(v=>v.holes[i].pts).filter(x=>x!=null);
+      const best=vals.length?Math.max(...vals):null;
+      holes.push({par:comp.course.pars[i],si:comp.course.si[i],pts:best});
+      if(best!=null){thru++;pts+=best}
+    }
+    return {key:"t:"+name,name,sub:evs.map(v=>v.name).join(" & "),phLabel:evs.map(v=>v.ph).join(" · "),members:evs,holes,thru,pts,pickup:false,complete:thru===18,team:true};
+  });
+}
+function segs(r,mode){
+  const H=r.holes;
+  if(mode==="pts"){const s=(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=H[i].pts||0;return t};return [s(9,18),s(12,18),s(15,18),s(17,18)]}
+  const s=(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=H[i].g;return t};const ph=mode==="net"?r.ph:0;
+  return [s(9,18)-ph/2,s(12,18)-ph/3,s(15,18)-ph/6,s(17,18)-ph/18];
+}
+function buildBoard(comp,entries,mode){
+  const points=FORMATS[comp.format].scoring==="points";
+  const rows=comp.format==="betterball"?teamRows(comp,entries):entries.map(e=>evalEntry(e,comp));
+  const segMode=points?"pts":mode;
+  rows.forEach(r=>{r.started=r.thru>0;r.nr=!points&&r.pickup;r.main=points?r.pts:(mode==="net"?r.netTP:r.grossTP);r.sg=r.complete&&!r.nr?segs(r,segMode):null});
+  const sign=points?-1:1;
+  const cmpMain=(a,b)=>{
+    if(a.started!==b.started)return a.started?-1:1;
+    if(a.nr!==b.nr)return a.nr?1:-1;
+    if(!a.started||a.nr)return 0;
+    return (a.main-b.main)*sign;
+  };
+  const cmpCb=(a,b)=>{if(!a.sg||!b.sg)return 0;for(let i=0;i<4;i++){const d=(a.sg[i]-b.sg[i])*sign;if(Math.abs(d)>1e-9)return d}return 0};
+  rows.sort((a,b)=>cmpMain(a,b)||cmpCb(a,b)||(b.thru-a.thru)||a.name.localeCompare(b.name));
+  rows.forEach((r,i)=>{
+    r.cb=false;r.tie=false;
+    if(!r.started){r.pos="–";return}
+    if(r.nr){r.pos="NR";return}
+    const p=rows[i-1];
+    if(p&&p.started&&!p.nr&&cmpMain(p,r)===0){
+      if(cmpCb(p,r)===0){r.posN=p.posN;r.tie=p.tie=true}
+      else{r.posN=i+1;if(r.sg&&p.sg){r.cb=p.cb=true}}
+    }else r.posN=i+1;
+  });
+  rows.forEach(r=>{if(r.posN)r.pos=(r.tie?"T":"")+r.posN});
+  return {rows,points};
+}
+function toPar(n){if(n===0)return '<span class="o">E</span>';return n<0?'<span class="u">'+n+'</span>':'<span class="o">+'+n+'</span>'}
+function mark(g,par){
+  if(g==null||g==="")return "";
+  if(g==="P")return '<span class="mk">P</span>';
+  const d=g-par,cls=d<=-2?"eagle":d===-1?"birdie":d===1?"bogey":d>=2?"dbl":"";
+  return '<span class="mk '+cls+'">'+g+'</span>';
+}
+function holeWord(g,par){
+  if(g==="P")return "Picked up";
+  const d=g-par;
+  return ({"-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double bogey","3":"Triple bogey"})[d]||(d<-3?"Condor":"+"+d);
+}
+
+/* ---------- data ---------- */
+function curComp(){if(S.compId==="sample")return SAMPLE;return S.comps.find(c=>c.id===S.compId)||null}
+function curEntries(){if(S.compId==="sample")return SAMPLE_ENTRIES;return S.entries[S.compId]||[]}
+let compsUnsub=null,entriesUnsub=null,entriesFor=null;
+function subscribeComps(){
+  const t=setTimeout(()=>{if(!S.compsLoaded){S.compsSlow=true;render()}},10000);
+  compsUnsub=S.db.collection("comps").onSnapshot(snap=>{
+    S.comps=snap.docs.map(d=>Object.assign({id:d.id},d.data())).filter(c=>c.course&&Array.isArray(c.course.pars));
+    S.comps.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+    if(!snap.metadata.fromCache){S.compsLoaded=true;S.compsSlow=false;clearTimeout(t)}
+    else if(snap.size)S.compsLoaded=true;
+    render(true);
+  },err=>{clearTimeout(t);S.compsLoaded=true;S.dbState="error";toast("Competitions couldn't load ("+err.code+"). Reload the page to try again.");render()});
+}
+function subscribeEntries(id){
+  if(entriesFor===id)return;
+  if(entriesUnsub){entriesUnsub();entriesUnsub=null}
+  entriesFor=id;
+  if(!S.db||!id||id==="sample")return;
+  entriesUnsub=S.db.collection("comps/"+id+"/players").onSnapshot(snap=>{
+    S.entries[id]=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
+    S.entries[id].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    S.entriesLoaded[id]=true;render(true);
+  },err=>{S.entriesLoaded[id]=true;toast("Scores couldn't load ("+err.code+").");render()});
+}
+function writeErr(err){
+  if(err&&err.code==="invalid_argument"){S.readOnly=true;toast("You can view this competition but not change it. Ask the owner for Contributor access.");render();return}
+  toast("That didn't save ("+(err&&err.code||"error")+"). Check your connection and try again.");
+}
+const timers={},inflight={};
+function setScore(e,hole,val){
+  const comp=curComp();
+  if(comp.local){if(val==null)delete e.scores[hole];else e.scores[hole]=val;render();return}
+  (pending[e.id]||(pending[e.id]={}))[hole]=val;render();
+  clearTimeout(timers[e.id]);timers[e.id]=setTimeout(()=>flush(comp.id,e.id),450);
+}
+async function flush(cid,pid){
+  if(inflight[pid]){clearTimeout(timers[pid]);timers[pid]=setTimeout(()=>flush(cid,pid),300);return}
+  const p=pending[pid];if(!p||!Object.keys(p).length)return;
+  const batch=Object.assign({},p);inflight[pid]=true;
+  try{await S.db.doc("comps/"+cid+"/players/"+pid).update({scores:batch})}
+  catch(err){writeErr(err)}
+  finally{inflight[pid]=false;for(const k in batch)if(pending[pid]&&pending[pid][k]===batch[k])delete pending[pid][k];render()}
+}
+function writable(){return !S.readOnly&&S.canWrite!==false&&(S.compId==="sample"||!!S.db)}
+
+/* ---------- toast ---------- */
+let toastT;function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,4200)}
+
+/* ---------- routing ---------- */
+function route(){
+  const h=(location.hash||"").slice(1);
+  let m;
+  S.confirm=null;
+  if(h==="new"){S.view="new";S.compId=null}
+  else if((m=/^c-([A-Za-z0-9_-]+?)(?:-(board|score|setup))?$/.exec(h))){
+    if(S.compId!==m[1]){S.openCard=null;S.editEntry=null;S.hole=(LS.get("hole:"+m[1])||1)}
+    S.view="comp";S.compId=m[1];S.tab=m[2]||"board";
+  }else{S.view="home";S.compId=null}
+  subscribeEntries(S.view==="comp"?S.compId:null);
+  render();window.scrollTo(0,0);
+}
+function go(h){if(location.hash==="#"+h)route();else location.hash=h}
+
+/* ---------- render ---------- */
+function render(fromSnapshot){
+  const conn=$("#conn");
+  conn.innerHTML=S.dbState==="live"?'<span class="pill">Live scoring</span>':S.dbState==="offline"?'<span class="pill warn">Not connected</span>':S.dbState==="connecting"?"Connecting…":"";
+  const app=$("#app");
+  if(S.view==="home")return renderHome(app);
+  if(S.view==="new")return fromSnapshot?null:renderCompForm(app,null);
+  const comp=curComp();
+  if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">All competitions</a></div></div>':'<p class="muted">Loading competition…</p>';return}
+  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);return}
+  renderComp(app,comp);
+}
+
+function renderHome(app){
+  let h='<div class="stack">';
+  h+='<div class="comp-head"><div><div class="eyebrow">Competitions</div><h1>The board</h1></div>';
+  if(S.db&&writable())h+='<a class="btn primary" href="#new">New competition</a>';
+  h+='</div>';
+  if(!S.db&&S.dbState!=="connecting")h+='<div class="banner">Shared scoring isn\'t available in this view. Open the page on claude.ai while signed in to create competitions and enter live scores. You can still explore the sample round.</div>';
+  if(S.compsSlow)h+='<div class="banner">Competitions can\'t be reached yet. Check your connection; this page keeps trying.</div>';
+  if(S.db&&S.canWrite===false)h+='<div class="banner">You can follow the leaderboards. Entering scores needs Contributor access from the page owner.</div>';
+  h+='<div class="comps">';
+  S.comps.forEach(c=>{
+    const n=(S.entries[c.id]||[]).length;
+    h+='<a class="btn comp-card" href="#c-'+esc(c.id)+'"><span class="eyebrow">'+esc(fmtDate(c.date))+'</span><span class="t">'+esc(c.name)+'</span><span class="muted">'+esc(FORMATS[c.format]?FORMATS[c.format].label:c.format)+' · '+esc(c.course.name||"Course")+'</span></a>';
+  });
+  h+='</div>';
+  if(S.db&&S.compsLoaded&&!S.comps.length){
+    h+='<div class="panel empty stack"><h2>No competitions yet</h2><p class="muted" style="max-width:60ch">Set up the course card and format, add the field with their handicap indexes, then share this page. Each group enters its own scores and the leaderboard updates for everyone.</p>'+(writable()?'<div><a class="btn primary" href="#new">Set up the first competition</a></div>':'')+'</div>';
+  }
+  h+='<div class="panel stack"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">Try it</div><h3>Sample medal round</h3></div><a class="btn" href="#c-sample">Open sample</a></div><p class="note">Five made-up players on a par-72 card. Changes to the sample stay on your screen and aren\'t saved.</p></div>';
+  h+='</div>';
+  app.innerHTML=h;
+}
+function fmtDate(d){if(!d)return "";const x=new Date(d+"T12:00:00");return isNaN(x)?d:x.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric"})}
+
+function renderComp(app,comp){
+  const f=FORMATS[comp.format]||FORMATS.stroke;
+  let h='';
+  if(comp.local)h+='<div class="banner sample" style="margin-top:6px">Sample competition. Scores you enter here stay on this screen only.</div>';
+  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
+  h+='<div class="tabs" role="tablist">';
+  [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
+  h+='</div><div id="tab"></div>';
+  app.innerHTML=h;
+  const tab=$("#tab");
+  if(!comp.local&&!S.entriesLoaded[comp.id]){tab.innerHTML='<p class="muted">Loading the field…</p>';return}
+  if(S.tab==="board")renderBoard(tab,comp);
+  else if(S.tab==="score")renderScore(tab,comp);
+  else renderSetup(tab,comp);
+}
+
+function renderBoard(tab,comp){
+  const entries=curEntries();
+  const f=FORMATS[comp.format];
+  if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>No one in the field yet</h2><p class="muted">Add players under Field &amp; course, then scores appear here as they come in.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Add players</button></div></div>';return}
+  const mode=f.scoring==="strokes"?S.boardMode:"pts";
+  const {rows,points}=buildBoard(comp,entries,mode);
+  const done=rows.filter(r=>r.complete).length,started=rows.filter(r=>r.started).length;
+  let h='<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row">';
+  h+=started&&done<rows.length?'<span class="pill live">Live</span>':done===rows.length?'<span class="pill">Final</span>':'<span class="pill warn">Not started</span>';
+  h+='<span class="note">'+done+' of '+rows.length+' '+(comp.format==="betterball"?"pairs":comp.format==="scramble"?"teams":"cards")+' complete</span></div>';
+  if(!points)h+='<div class="seg" role="group" aria-label="Leaderboard type"><button aria-pressed="'+(S.boardMode==="net")+'" data-mode="net">Net</button><button aria-pressed="'+(S.boardMode==="gross")+'" data-mode="gross">Gross</button></div>';
+  h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(comp.format==="betterball"?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th>'+(comp.format==="scramble"?"Team hcp":"Playing hcp")+'</th>';
+  h+=points?'<th>Points</th>':'<th>Gross</th><th>'+(mode==="net"?"Net":"")+'</th><th>To par</th>';
+  h+='</tr></thead><tbody>';
+  const cols=points?5:7;
+  rows.forEach(r=>{
+    const thru=!r.started?"–":r.complete?"F":r.thru;
+    h+='<tr class="ent" data-card="'+esc(r.key)+'" aria-expanded="'+(S.openCard===r.key)+'"><td class="pos">'+esc(r.pos)+(r.cb?'<span class="cb" title="Decided on countback">C/B</span>':'')+'</td>';
+    h+='<td><div class="nm">'+esc(r.name)+'</div>'+(r.sub?'<div class="sub">'+esc(r.sub)+'</div>':'')+'</td><td>'+thru+'</td><td>'+esc(r.phLabel)+'</td>';
+    if(points)h+='<td><span class="big">'+(r.started?r.pts:"–")+'</span></td>';
+    else{
+      h+='<td>'+(r.complete&&!r.nr?r.gross:r.started?'<span class="muted">'+(r.nr?"NR":r.gross)+'</span>':"–")+'</td>';
+      h+='<td>'+(mode==="net"&&r.complete&&!r.nr?r.gross-r.ph:"")+'</td>';
+      h+='<td><span class="big">'+(!r.started?"–":r.nr?'<span class="muted">NR</span>':toPar(r.main))+'</span></td>';
+    }
+    h+='</tr>';
+    if(S.openCard===r.key)h+='<tr class="card-row"><td colspan="'+cols+'">'+cardHtml(comp,r)+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<p class="note" style="margin-top:10px">Tap a row to see the card. '+(points?'Stableford points: 2 for a net par, 1 more per stroke under.':'NR: no return, the player picked up on a hole.')+' Ties on completed cards go to countback over the last 9, 6, 3 and 1 holes'+(points?'':(mode==="net"?', using ½, ⅓, ⅙ and 1/18 of the handicap':''))+'.</p>';
+  tab.innerHTML=h;
+}
+function cardHtml(comp,r){
+  const c=comp.course;
+  const lines=r.team?r.members:[r];
+  const range=(a,b)=>{const o=[];for(let i=a;i<b;i++)o.push(i);return o};
+  const half=(idx,lbl)=>idx.map(i=>'<'+lbl+'>'+(i+1)+'</'+lbl+'>').join("");
+  let h='<div class="sc-wrap"><table class="sc"><thead><tr><th class="lbl">Hole</th>'+half(range(0,9),"th")+'<th>Out</th>'+half(range(9,18),"th")+'<th>In</th><th>Tot</th></tr></thead><tbody>';
+  const rowOf=(lbl,fn,tot)=>{let s='<tr><td class="lbl">'+lbl+'</td>';range(0,9).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(0,9)+'</td>';range(9,18).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(9,18)+'</td><td class="tot">'+tot(0,18)+'</td></tr>';return s};
+  const sp=(a,b)=>sum(c.pars.slice(a,b));
+  h+=rowOf("Par",i=>c.pars[i],sp);
+  h+=rowOf("S.I.",i=>c.si[i],()=>"");
+  lines.forEach(L=>{
+    const hasP=L.holes.some(x=>x.g==="P");
+    h+=rowOf(r.team?esc(String(L.name).slice(0,12)):"Score",i=>mark(L.holes[i].g,c.pars[i])+(L.holes[i].rec>0?'<div class="dots">'+"•".repeat(L.holes[i].rec)+'</div>':""),(a,b)=>{if(hasP&&b-a===18)return"NR";let t=0,any=false;for(let i=a;i<b;i++){if(typeof L.holes[i].g==="number"){t+=L.holes[i].g;any=true}}return any?t:""});
+    if(FORMATS[comp.format].scoring==="points")h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=L.holes[i].pts||0;return t});
+  });
+  if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
+  h+='</tbody></table></div>';
+  return h;
+}
+
+function groupKey(comp){return "grp:"+comp.id}
+function renderScore(tab,comp){
+  const entries=curEntries();
+  if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>Add the field first</h2><p class="muted">Scores are entered per player or team. Add them under Field &amp; course.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Add players</button></div></div>';return}
+  let grp=(LS.get(groupKey(comp))||[]).filter(id=>entries.some(e=>e.id===id));
+  if(comp.local&&!LS.get(groupKey(comp)))grp=["s3","s5"];
+  const f=FORMATS[comp.format],points=f.scoring==="points";
+  const c=comp.course,hole=S.hole,i=hole-1;
+  let h='<div class="stack"><div class="panel stack"><div><div class="eyebrow">Your card</div><p class="note" style="margin:2px 0 0">Pick who you\'re marking for, up to four.</p></div><div class="chips">';
+  entries.forEach(e=>{h+='<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(e.name)+'</button>'});
+  h+='</div></div>';
+  if(!writable())h+='<div class="banner">You can see scores but not enter them. Entering scores needs Contributor access from the page owner.</div>';
+  const sel=grp.map(id=>entries.find(e=>e.id===id)).filter(Boolean);
+  if(sel.length){
+    h+='<div class="panel stack"><div class="holes" role="group" aria-label="Choose hole">';
+    for(let k=1;k<=18;k++){const done=sel.every(e=>scoreAt(e,k)!=null);h+='<button data-hole="'+k+'" aria-current="'+(k===hole)+'" class="'+(done?"done":"")+'" aria-label="Hole '+k+(done?", scored":"")+'">'+k+'</button>'}
+    h+='</div><div class="hole-head"><button aria-label="Previous hole" data-hole="'+(hole>1?hole-1:18)+'">‹</button><div style="text-align:center"><div class="eyebrow">Hole</div><div class="h">'+hole+'</div></div><div class="meta"><span>Par <b>'+c.pars[i]+'</b></span><span>S.I. <b>'+c.si[i]+'</b></span></div><button aria-label="Next hole" data-hole="'+(hole<18?hole+1:1)+'">›</button></div>';
+    sel.forEach(e=>{
+      const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
+      let res="";
+      if(v!=null){res=holeWord(v,H.par);if(v!=="P"&&H.rec)res+=" · net "+H.net;if(points)res+=" · "+H.pts+" pt"+(H.pts===1?"":"s")}
+      const run=points?ev.pts+" pts":(ev.pickup?"NR":"Net "+stripTP(ev.netTP));
+      h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div><div class="res">Hcp '+ev.ph+' · thru '+ev.thru+' · '+run+(res?' — <b>'+esc(res)+'</b>':'')+'</div></div>';
+      const dis=writable()?"":" disabled";
+      h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(e.name)+'"'+dis+'>−</button><span class="val" aria-live="polite">'+(v==null?'<span class="muted">–</span>':esc(v))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(e.name)+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(e.name)+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
+    });
+    h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div>';
+  }
+  h+='</div>';
+  tab.innerHTML=h;
+}
+function stripTP(n){return n===0?"E":n>0?"+"+n:String(n)}
+
+/* ---------- setup ---------- */
+function renderSetup(tab,comp){
+  const f=FORMATS[comp.format];
+  let h='<div class="stack" id="setup-root"><div class="panel stack"><div class="row" style="justify-content:space-between"><h2>'+(comp.format==="betterball"?"Pairs":comp.format==="scramble"?"Teams":"Field")+'</h2><span class="note" id="fieldCount"></span></div><div id="elist" class="elist"></div>';
+  if(writable()){
+    const team=comp.format==="betterball",scr=comp.format==="scramble";
+    h+='<form id="eform" class="stack" style="border-top:1px solid var(--line);padding-top:14px" novalidate><h3 id="eformTitle">Add '+(scr?"a team":"a player")+'</h3><div class="grid">';
+    h+='<label class="f">'+(scr?"Team name":"Name")+'<input id="e-name" required autocomplete="off"></label>';
+    h+='<label class="f">'+(scr?"Team handicap":"Handicap index")+'<input id="e-index" inputmode="decimal" placeholder="'+(scr?"e.g. 6":"e.g. 12.4 or +1.2")+'"></label>';
+    if(team)h+='<label class="f">Pair name<input id="e-team" placeholder="Same name for both partners" autocomplete="off"></label>';
+    if(scr)h+='<label class="f">Players<input id="e-members" placeholder="Names, comma separated" autocomplete="off"></label>';
+    h+='</div><div class="row"><button class="primary" type="submit" id="eSubmit">Add</button><button type="button" class="ghost" id="eCancel" hidden>Cancel</button><span class="err" id="eErr"></span></div>';
+    h+='<p class="note" style="margin:0">'+(scr?"Enter the team's playing handicap directly.":"Playing handicap = handicap index × slope ÷ 113 + (course rating − par), rounded, then × "+esc(comp.allowance)+"% allowance. Write a plus handicap as +1.2.")+'</p></form>';
+  }
+  h+='</div>';
+  if(writable()){
+    h+='<div class="panel stack"><h2>Competition &amp; course</h2><div id="cform-host"></div></div>';
+  }
+  h+='</div>';
+  tab.innerHTML=h;
+  renderEntryList(comp);
+  if(writable()){compForm($("#cform-host"),comp);bindEntryForm(comp)}
+}
+function renderEntryList(comp){
+  const el=$("#elist");if(!el)return;
+  const entries=curEntries();
+  $("#fieldCount").textContent=entries.length?entries.length+(comp.format==="scramble"?" team":" player")+(entries.length===1?"":"s"):"";
+  if(!entries.length){el.innerHTML='<p class="muted" style="margin:0">Nobody entered yet.</p>';return}
+  let list=entries.slice();
+  if(comp.format==="betterball")list.sort((a,b)=>(a.team||"~").localeCompare(b.team||"~"));
+  let h="";
+  list.forEach(e=>{
+    const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
+    h+='<div class="erow"><div class="who"><b>'+esc(e.name)+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(e.members)+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
+    if(writable()){
+      const conf=S.confirm==="e:"+e.id;
+      h+='<div class="row"><button data-edit="'+esc(e.id)+'">Edit</button><button class="'+(conf?"danger":"ghost")+'" data-del="'+esc(e.id)+'">'+(conf?"Confirm remove":"Remove")+'</button></div>';
+    }
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+function fmtIdx(v){const n=Number(v)||0;return n<0?"+"+(-n):String(n)}
+function parseIdx(s){s=String(s||"").trim();if(!s)return 0;let neg=false;if(s[0]==="+"){neg=true;s=s.slice(1)}const n=parseFloat(s.replace(",","."));if(isNaN(n))return NaN;return neg?-n:n}
+function bindEntryForm(comp){
+  const form=$("#eform");
+  const reset=()=>{S.editEntry=null;form.reset();$("#eformTitle").textContent=comp.format==="scramble"?"Add a team":"Add a player";$("#eSubmit").textContent="Add";$("#eCancel").hidden=true;$("#eErr").textContent=""};
+  $("#eCancel").onclick=reset;
+  form.onsubmit=async ev=>{
+    ev.preventDefault();
+    const name=$("#e-name").value.trim(),idx=parseIdx($("#e-index").value);
+    if(!name){$("#eErr").textContent="Add a name.";return}
+    if(isNaN(idx)||idx<-10||idx>54){$("#eErr").textContent="Handicap must be a number between +10 and 54.";return}
+    const data={name,index:idx};
+    if($("#e-team"))data.team=$("#e-team").value.trim();
+    if($("#e-members"))data.members=$("#e-members").value.trim();
+    const editing=S.editEntry;
+    if(comp.local){
+      if(editing)Object.assign(SAMPLE_ENTRIES.find(e=>e.id===editing),data);
+      else SAMPLE_ENTRIES.push(Object.assign({id:"s"+Date.now(),scores:{}},data));
+      reset();renderEntryList(comp);return;
+    }
+    $("#eSubmit").disabled=true;
+    try{
+      if(editing)await S.db.doc("comps/"+comp.id+"/players/"+editing).update(data);
+      else await S.db.collection("comps/"+comp.id+"/players").add(Object.assign({scores:{},createdAt:Date.now()},data));
+      reset();toast(editing?"Saved "+name+".":"Added "+name+".");$("#e-name").focus();
+    }catch(err){writeErr(err)}
+    finally{$("#eSubmit").disabled=false}
+  };
+}
+function startEdit(comp,id){
+  const e=curEntries().find(x=>x.id===id);if(!e)return;
+  S.editEntry=id;
+  $("#e-name").value=e.name||"";$("#e-index").value=e.index?fmtIdx(e.index):"";
+  if($("#e-team"))$("#e-team").value=e.team||"";
+  if($("#e-members"))$("#e-members").value=e.members||"";
+  $("#eformTitle").textContent="Edit "+e.name;$("#eSubmit").textContent="Save";$("#eCancel").hidden=false;
+  $("#e-name").focus();
+}
+
+function renderCompForm(app,comp){
+  app.innerHTML='<div class="stack"><div class="comp-head"><div><div class="eyebrow">New competition</div><h1>Set up the day</h1></div><a class="btn ghost" href="#home">Cancel</a></div><div class="panel"><div id="cform-host"></div></div></div>';
+  if(!S.db||!writable()){$("#cform-host").innerHTML='<p class="muted">Creating competitions needs a signed-in view with Contributor access.</p>';return}
+  compForm($("#cform-host"),null);
+}
+function compForm(host,comp){
+  const c=comp?comp.course:{name:"",slope:113,rating:72,pars:PAR_DEFAULT,si:SI_DEFAULT};
+  const fmt=comp?comp.format:"stableford";
+  const today=new Date();const iso=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
+  let h='<form id="cform" class="stack" novalidate><div class="grid">';
+  h+='<label class="f">Competition name<input id="f-name" value="'+esc(comp?comp.name:"")+'" placeholder="e.g. Saturday Stableford" autocomplete="off"></label>';
+  h+='<label class="f">Date<input id="f-date" type="date" value="'+esc(comp?comp.date:iso)+'"></label>';
+  h+='<label class="f">Format<select id="f-format">'+Object.entries(FORMATS).map(([k,v])=>'<option value="'+k+'"'+(k===fmt?" selected":"")+'>'+v.label+'</option>').join("")+'</select></label>';
+  h+='<label class="f" id="allowWrap">Handicap allowance %<input id="f-allow" inputmode="numeric" value="'+esc(comp?comp.allowance:FORMATS[fmt].allowance)+'"></label>';
+  h+='</div><p class="note" id="fmtBlurb" style="margin:0"></p>';
+  h+='<div class="grid"><label class="f">Course and tees<input id="f-course" value="'+esc(c.name)+'" placeholder="e.g. Old Course, yellow tees" autocomplete="off"></label>';
+  h+='<label class="f">Course rating<input id="f-rating" inputmode="decimal" value="'+esc(c.rating)+'"></label>';
+  h+='<label class="f">Slope rating<input id="f-slope" inputmode="numeric" value="'+esc(c.slope)+'"></label></div>';
+  h+='<div><div class="eyebrow" style="margin-bottom:6px">Card: par and stroke index</div><div class="course-wrap"><table class="course"><thead><tr><th class="lbl">Hole</th>';
+  for(let k=1;k<=18;k++)h+='<th>'+k+'</th>';
+  h+='<th>Tot</th></tr></thead><tbody><tr><td class="lbl">Par</td>';
+  for(let k=0;k<18;k++)h+='<td><input id="par-'+(k+1)+'" inputmode="numeric" value="'+c.pars[k]+'" aria-label="Par hole '+(k+1)+'"></td>';
+  h+='<td class="num" id="parTot"></td></tr><tr><td class="lbl">S.I.</td>';
+  for(let k=0;k<18;k++)h+='<td><input id="si-'+(k+1)+'" inputmode="numeric" value="'+c.si[k]+'" aria-label="Stroke index hole '+(k+1)+'"></td>';
+  h+='<td></td></tr></tbody></table></div><p class="note" style="margin:6px 0 0">Copy these from the scorecard. Stroke index 1 is the hardest hole and gets the first handicap stroke.</p></div>';
+  h+='<div class="row"><button class="primary" type="submit" id="cSubmit">'+(comp?"Save changes":"Create competition")+'</button><span class="err" id="cErr"></span></div>';
+  if(comp&&!comp.local&&S.canEdit)h+='<div style="border-top:1px solid var(--line);padding-top:14px" class="row"><button type="button" class="'+(S.confirm==="comp"?"danger":"ghost")+'" id="cDel">'+(S.confirm==="comp"?"Confirm: delete competition and all scores":"Delete competition")+'</button></div>';
+  h+='</form>';
+  host.innerHTML=h;
+  const upd=()=>{const k=$("#f-format").value;$("#fmtBlurb").textContent=FORMATS[k].blurb;$("#allowWrap").hidden=k==="scramble";let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
+  upd();
+  $("#f-format").onchange=()=>{$("#f-allow").value=FORMATS[$("#f-format").value].allowance;upd()};
+  host.querySelectorAll('[id^="par-"]').forEach(x=>x.oninput=upd);
+  const del=$("#cDel");
+  if(del)del.onclick=async()=>{
+    if(S.confirm!=="comp"){S.confirm="comp";compForm(host,comp);setTimeout(()=>{if(S.confirm==="comp"){S.confirm=null;if(document.body.contains(host))compForm(host,comp)}},5000);return}
+    S.confirm=null;del.disabled=true;
+    try{for(const e of curEntries())await S.db.doc("comps/"+comp.id+"/players/"+e.id).delete();await S.db.doc("comps/"+comp.id).delete();toast("Deleted "+comp.name+".");go("home")}
+    catch(err){writeErr(err)}
+  };
+  $("#cform").onsubmit=async ev=>{
+    ev.preventDefault();
+    const err=m=>{$("#cErr").textContent=m};
+    const name=$("#f-name").value.trim();if(!name)return err("Give the competition a name.");
+    const format=$("#f-format").value;
+    const allowance=format==="scramble"?100:parseFloat($("#f-allow").value);
+    if(!(allowance>0&&allowance<=100))return err("Allowance must be between 1 and 100%.");
+    const pars=[],si=[];
+    for(let i=1;i<=18;i++){const p=parseInt($("#par-"+i).value),s=parseInt($("#si-"+i).value);if(!(p>=3&&p<=6))return err("Par on hole "+i+" must be 3 to 6.");pars.push(p);si.push(s)}
+    const sorted=si.slice().sort((a,b)=>a-b);if(sorted.some((v,i)=>v!==i+1))return err("Stroke indexes must use each number 1 to 18 once.");
+    const rating=parseFloat(String($("#f-rating").value).replace(",",".")),slope=parseInt($("#f-slope").value);
+    if(!(rating>50&&rating<90))return err("Course rating looks wrong. It's usually close to par, e.g. 71.4.");
+    if(!(slope>=55&&slope<=155))return err("Slope rating must be 55 to 155. Use 113 if you don't know it.");
+    const data={name,date:$("#f-date").value,format,allowance,course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
+    if(comp&&comp.local){Object.assign(SAMPLE,data);toast("Sample updated on this screen.");render();return}
+    $("#cSubmit").disabled=true;
+    try{
+      if(comp){await S.db.doc("comps/"+comp.id).update(data);toast("Saved.");render()}
+      else{const ref=await S.db.collection("comps").add(Object.assign({createdAt:Date.now()},data));go("c-"+ref.id+"-setup")}
+    }catch(e){writeErr(e);$("#cSubmit").disabled=false}
+  };
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",ev=>{
+  const t=ev.target.closest("button,[data-card]");if(!t)return;
+  const comp=curComp();
+  if(t.dataset.go){go(t.dataset.go);return}
+  if(t.dataset.mode){S.boardMode=t.dataset.mode;render();return}
+  if(t.dataset.card){S.openCard=S.openCard===t.dataset.card?null:t.dataset.card;render();return}
+  if(t.dataset.grp&&comp){
+    const entries=curEntries();let g=(LS.get(groupKey(comp))||(comp.local?["s3","s5"]:[])).filter(id=>entries.some(e=>e.id===id));
+    const id=t.dataset.grp;
+    if(g.includes(id))g=g.filter(x=>x!==id);else{if(g.length>=4){toast("A card holds up to four. Remove someone first.");return}g.push(id)}
+    LS.set(groupKey(comp),g);render();return;
+  }
+  if(t.dataset.hole&&comp){S.hole=+t.dataset.hole;LS.set("hole:"+comp.id,S.hole);render();return}
+  if((t.dataset.step||t.dataset.pick)&&comp&&writable()){
+    const id=t.dataset.e||t.dataset.pick,e=curEntries().find(x=>x.id===id);if(!e)return;
+    const par=comp.course.pars[S.hole-1],cur=scoreAt(e,S.hole);
+    let v;
+    if(t.dataset.pick)v=cur==null?"P":null;
+    else{const d=+t.dataset.step;if(cur==null||cur==="P")v=d>0?par:par-1;else v=Math.min(15,Math.max(1,cur+d))}
+    setScore(e,S.hole,v);return;
+  }
+  if(t.dataset.edit&&comp){startEdit(comp,t.dataset.edit);return}
+  if(t.dataset.del&&comp){
+    const id=t.dataset.del;
+    if(S.confirm!=="e:"+id){S.confirm="e:"+id;renderEntryList(comp);setTimeout(()=>{if(S.confirm==="e:"+id){S.confirm=null;renderEntryList(comp)}},4000);return}
+    S.confirm=null;
+    if(comp.local){const k=SAMPLE_ENTRIES.findIndex(e=>e.id===id);if(k>=0)SAMPLE_ENTRIES.splice(k,1);renderEntryList(comp);return}
+    S.db.doc("comps/"+comp.id+"/players/"+id).delete().catch(writeErr);
+  }
+});
+window.addEventListener("hashchange",route);
+
+/* ---------- boot ---------- */
+route();
+(async function(){
+  const cl=window.claude;
+  if(!cl||!cl.use){S.dbState="offline";render();return}
+  const [db,user]=await Promise.all([cl.use("db"),cl.use("user")]);
+  S.user=user;
+  if(user){try{S.canWrite=await user.can("data.write")}catch(e){}try{S.canEdit=await user.canEdit()}catch(e){}}
+  if(!db){S.dbState="offline";render();return}
+  S.db=db;S.dbState="live";
+  subscribeComps();
+  if(S.view==="comp"){entriesFor=null;subscribeEntries(S.compId)}
+  render();
+})();
+})();
+</script>
