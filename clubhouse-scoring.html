@@ -89,13 +89,11 @@ table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
 .seg.kind button{flex:1 1 0;min-height:44px;font-family:var(--f-display);font-size:17px;letter-spacing:.03em;text-transform:uppercase;padding:6px 12px;line-height:1.1}
 
 /* Scorecard grid */
-.sc-pair{display:flex;flex-wrap:wrap;gap:10px;padding:0 12px}
-.sc-wrap{flex:1 1 360px;min-width:0;overflow-x:auto}
-table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px;width:100%;table-layout:fixed}
-.sc th,.sc td{border:1px solid var(--line);text-align:center;padding:4px 1px;overflow:hidden}
+.sc-wrap{overflow-x:auto;padding:0 12px;width:0;min-width:100%}/* width:0 keeps the wide card from stretching the leaderboard; it scrolls on its own */
+table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px;min-width:720px;width:100%}
+.sc th,.sc td{border:1px solid var(--line);text-align:center;padding:4px 2px;min-width:30px}
 .sc th{font-weight:600;color:var(--muted);background:var(--sunk);font-size:11px}
-.sc th.tc{width:34px}
-.sc td.lbl,.sc th.lbl{text-align:left;padding-inline:6px;width:58px;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;text-overflow:ellipsis}
+.sc td.lbl,.sc th.lbl{text-align:left;padding-inline:8px;min-width:64px;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 .sc td.tot{font-weight:700;background:var(--sunk)}
 .mk{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;font-weight:600}
 .mk.eagle{border-radius:50%;box-shadow:0 0 0 1.5px var(--under),0 0 0 3.5px var(--surface),0 0 0 5px var(--under);color:var(--under)}
@@ -150,12 +148,6 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
   .board .big{font-size:23px}
   .board .nm{overflow-wrap:anywhere}
   .seg.kind .lg{display:none}
-  .sc-pair{padding:0 6px;gap:8px}
-  .sc-wrap{flex-basis:100%}
-  table.sc{font-size:12px}
-  .sc td.lbl,.sc th.lbl{width:44px;padding-inline:4px;font-size:10px;letter-spacing:.02em}
-  .sc th.tc{width:32px;font-size:10px}
-  .mk{width:21px;height:21px}
   .holes button{min-height:34px;font-size:16px}
   .stepper button{width:44px;height:44px}
   .hole-head .h{font-size:36px}
@@ -443,7 +435,7 @@ function renderBoard(tab,comp){
   const cols=points?5:7;
   rows.forEach(r=>{
     const thru=!r.started?"–":r.complete?"F":r.thru;
-    const grossTxt=r.complete&&!r.nr?String(r.gross):r.started?(r.nr?"NR":String(r.gross)):"";
+    const grossTxt=r.started&&!r.nr?String(r.gross):"";
     const netTxt=!points&&mode==="net"&&r.complete&&!r.nr?String(r.gross-r.ph):"";
     const mline=['Hcp '+r.phLabel].concat(points?[]:[grossTxt?grossTxt+' gross':'',netTxt?netTxt+' net':'']).filter(Boolean).join(' · ');
     h+='<tr class="ent" data-card="'+esc(r.key)+'" aria-expanded="'+(S.openCard===r.key)+'"><td class="pos">'+esc(r.pos)+(r.cb?'<span class="cb" title="Decided on countback">C/B</span>':'')+'</td>';
@@ -465,22 +457,20 @@ function cardHtml(comp,r,points){
   const c=comp.course;
   const lines=r.team?r.members:[r];
   const range=(a,b)=>{const o=[];for(let i=a;i<b;i++)o.push(i);return o};
+  const half=(idx,lbl)=>idx.map(i=>'<'+lbl+'>'+(i+1)+'</'+lbl+'>').join("");
+  let h='<div class="sc-wrap"><table class="sc"><thead><tr><th class="lbl">Hole</th>'+half(range(0,9),"th")+'<th>Out</th>'+half(range(9,18),"th")+'<th>In</th><th>Tot</th></tr></thead><tbody>';
+  const rowOf=(lbl,fn,tot)=>{let s='<tr><td class="lbl">'+lbl+'</td>';range(0,9).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(0,9)+'</td>';range(9,18).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(9,18)+'</td><td class="tot">'+tot(0,18)+'</td></tr>';return s};
   const sp=(a,b)=>sum(c.pars.slice(a,b));
-  // One table per nine, so each fits a phone screen; side by side when there's room.
-  const nine=(a,b,back)=>{
-    let h='<div class="sc-wrap"><table class="sc"><thead><tr><th class="lbl">'+(back?"In":"Out")+'</th>'+range(a,b).map(i=>'<th>'+(i+1)+'</th>').join("")+'<th class="tc">'+(back?"In":"Out")+'</th>'+(back?'<th class="tc">Tot</th>':'')+'</tr></thead><tbody>';
-    const rowOf=(lbl,fn,tot)=>{let s='<tr><td class="lbl">'+lbl+'</td>';range(a,b).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(a,b)+'</td>';if(back)s+='<td class="tot">'+tot(0,18)+'</td>';return s+'</tr>'};
-    h+=rowOf("Par",i=>c.pars[i],sp);
-    h+=rowOf("S.I.",i=>c.si[i],()=>"");
-    lines.forEach(L=>{
-      const hasP=L.holes.some(x=>x.g==="P");
-      h+=rowOf(r.team?esc(String(L.name).slice(0,10)):"Score",i=>mark(L.holes[i].g,c.pars[i])+(L.holes[i].rec>0?'<div class="dots">'+"•".repeat(L.holes[i].rec)+'</div>':""),(x,y)=>{if(hasP&&y-x===18)return"NR";let t=0,any=false;for(let i=x;i<y;i++){if(typeof L.holes[i].g==="number"){t+=L.holes[i].g;any=true}}return any?t:""});
-      if(points)h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(x,y)=>{let t=0;for(let i=x;i<y;i++)t+=L.holes[i].pts||0;return t});
-    });
-    if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(x,y)=>{let t=0;for(let i=x;i<y;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
-    return h+'</tbody></table></div>';
-  };
-  return '<div class="sc-pair">'+nine(0,9,false)+nine(9,18,true)+'</div>';
+  h+=rowOf("Par",i=>c.pars[i],sp);
+  h+=rowOf("S.I.",i=>c.si[i],()=>"");
+  lines.forEach(L=>{
+    const hasP=L.holes.some(x=>x.g==="P");
+    h+=rowOf(r.team?esc(String(L.name).slice(0,12)):"Score",i=>mark(L.holes[i].g,c.pars[i])+(L.holes[i].rec>0?'<div class="dots">'+"•".repeat(L.holes[i].rec)+'</div>':""),(a,b)=>{if(hasP&&b-a===18)return"NR";let t=0,any=false;for(let i=a;i<b;i++){if(typeof L.holes[i].g==="number"){t+=L.holes[i].g;any=true}}return any?t:""});
+    if(points)h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=L.holes[i].pts||0;return t});
+  });
+  if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
+  h+='</tbody></table></div>';
+  return h;
 }
 
 function groupKey(comp){return "grp:"+comp.id}
