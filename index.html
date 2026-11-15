@@ -150,6 +150,7 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
 .elist{display:flex;flex-direction:column}
 .erow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding-block:10px;border-top:1px solid var(--line);flex-wrap:wrap}
 .erow .who{min-width:0;flex:1 1 180px}
+.ecount{flex:none;align-self:flex-start;min-width:2ch;text-align:right;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}/* display-only entry number */
 .err{color:var(--under);font-size:13px}
 .code{font-family:var(--f-mono);font-size:12px;font-weight:500;letter-spacing:.08em;padding:1px 7px;border:1px solid var(--line);border-radius:4px;color:var(--fg);background:var(--sunk)}
 #f-code{font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.08em}
@@ -662,9 +663,9 @@ function renderEntryList(comp){
   let list=entries.slice();
   if(comp.format==="betterball"||hasTeams(comp))list.sort((a,b)=>(a.team||"~").localeCompare(b.team||"~"));
   let h="";
-  list.forEach(e=>{
+  list.forEach((e,n)=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
-    h+='<div class="erow"><div class="who"><b>'+esc(dispName(e,comp))+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo&&canSeeDetails(comp)?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(dispMembers(e.members,comp))+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
+    h+='<div class="erow"><span class="ecount" aria-label="Entry '+(n+1)+'">'+(n+1)+'</span><div class="who"><b>'+esc(dispName(e,comp))+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo&&canSeeDetails(comp)?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(dispMembers(e.members,comp))+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
     if(canAdmin()){
       const conf=S.confirm==="e:"+e.id;
       h+='<div class="row"><button data-edit="'+esc(e.id)+'">Edit</button><button class="'+(conf?"danger":"ghost")+'" data-del="'+esc(e.id)+'">'+(conf?"Confirm remove":"Remove")+'</button></div>';
