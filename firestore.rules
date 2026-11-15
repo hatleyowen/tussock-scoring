@@ -1,0 +1,59 @@
+rules_version = '2';
+
+// Tussock Scoring access rules.
+//  - Anyone can read competitions, fields and scores (leaderboards are public to anyone with the link).
+//  - Organisers (a document in /admins with their user id) can change everything.
+//  - Players unlock score entry for one competition by entering its join code. The code lives in
+//    /secrets, which only organisers can read; joining creates /comps/{id}/members/{uid} and is
+//    only allowed when the code they send matches.
+//  - Joined players can change the `scores` field on player entries in that competition, nothing else.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function isMember(compId) {
+      return signedIn() && exists(/databases/$(database)/documents/comps/$(compId)/members/$(request.auth.uid));
+    }
+    function validScores() {
+      return request.resource.data.scores is map && request.resource.data.scores.size() <= 18;
+    }
+
+    // Organiser list. Managed in the Firebase console; each person can only check their own entry.
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Join codes, one document per competition: { code: "TUS2026" }.
+    match /secrets/{compId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /comps/{compId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /players/{playerId} {
+        allow read: if true;
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin()
+          || (isMember(compId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scores'])
+              && validScores());
+      }
+
+      match /members/{uid} {
+        allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['code', 'joinedAt'])
+          && exists(/databases/$(database)/documents/secrets/$(compId))
+          && request.resource.data.code == get(/databases/$(database)/documents/secrets/$(compId)).data.code;
+        allow delete: if isAdmin();
+        allow update: if false;
+      }
+    }
+  }
+}

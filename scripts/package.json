@@ -1,0 +1,9 @@
+{
+  "name": "tussock-scoring-scripts",
+  "private": true,
+  "type": "module",
+  "description": "One-off admin scripts for Tussock Scoring (not needed to run the app).",
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

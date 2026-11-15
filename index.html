@@ -1,5 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Tussock Scoring</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Live golf competition scoring: stroke play, Stableford and pairs better-ball.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 26'%3E%3Cpath d='M4 1v24' stroke='%231E5B3A' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M5 2l14 5-14 5z' fill='%231E5B3A'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -162,7 +168,16 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
   .hole-head .h{font-size:36px}
 }
 @media (prefers-reduced-motion:no-preference){button{transition:background .12s,border-color .12s,color .12s}}
+.top-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.who-chip{font-size:13px;color:var(--muted);max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-right button{min-height:34px;padding:4px 12px;font-size:14px}
+.join{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.join label.f{flex:1 1 180px}
+#j-code{font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.08em}
+.uid{font-family:var(--f-mono);font-size:12px;user-select:all;overflow-wrap:anywhere}
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header class="top">
@@ -170,13 +185,17 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
       <svg width="22" height="26" viewBox="0 0 22 26" aria-hidden="true"><path d="M4 1v24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M5 2l14 5-14 5z" fill="currentColor"/></svg>
       Tussock Scoring
     </a>
-    <span id="conn" class="note"></span>
+    <div class="top-right"><span id="conn" class="note"></span><span id="auth"></span></div>
   </header>
   <main id="app"></main>
 </div>
 <div id="toast" class="toast" hidden role="status"></div>
 
-<script>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInAnonymously,signInWithPopup,GoogleAuthProvider,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection as fsCollection,doc as fsDoc,onSnapshot,addDoc,updateDoc,setDoc,deleteDoc,getDoc,getDocs,deleteField,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import {firebaseConfig} from "./firebase-config.js";
 (function(){
 "use strict";
 const PAR_DEFAULT=[4,4,3,5,4,4,3,4,5,4,3,5,4,4,4,3,4,5];
@@ -191,7 +210,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const LS={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
-const S={db:null,user:null,dbState:"connecting",canWrite:null,canEdit:false,readOnly:false,
+const S={db:null,fb:null,authUser:null,isAdmin:false,joined:{},secrets:{},dbState:"connecting",readOnly:false,
   comps:[],compsLoaded:false,compsSlow:false,entries:{},entriesLoaded:{},
   view:"home",compId:null,tab:"board",boardMode:"net",boardKind:(LS.get("kind")==="team"?"team":"ind"),openCard:null,hole:1,editEntry:null,confirm:null};
 const pending={};
@@ -318,6 +337,7 @@ function subscribeEntries(id){
   if(entriesUnsub){entriesUnsub();entriesUnsub=null}
   entriesFor=id;
   if(!S.db||!id||id==="sample")return;
+  checkJoined(id);
   entriesUnsub=S.db.collection("comps/"+id+"/players").onSnapshot(snap=>{
     S.entries[id]=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
     S.entries[id].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
@@ -325,7 +345,7 @@ function subscribeEntries(id){
   },err=>{S.entriesLoaded[id]=true;toast("Scores couldn't load ("+err.code+").");render()});
 }
 function writeErr(err){
-  if(err&&err.code==="invalid_argument"){S.readOnly=true;toast("You can view this competition but not change it. Ask the owner for Contributor access.");render();return}
+  if(err&&err.code==="permission-denied"){toast("That change isn't allowed from this phone. Enter the competition code, or sign in as an organiser.");render();return}
   toast("That didn't save ("+(err&&err.code||"error")+"). Check your connection and try again.");
 }
 const timers={},inflight={};
@@ -339,11 +359,31 @@ async function flush(cid,pid){
   if(inflight[pid]){clearTimeout(timers[pid]);timers[pid]=setTimeout(()=>flush(cid,pid),300);return}
   const p=pending[pid];if(!p||!Object.keys(p).length)return;
   const batch=Object.assign({},p);inflight[pid]=true;
-  try{await S.db.doc("comps/"+cid+"/players/"+pid).update({scores:batch})}
+  const upd={};for(const k in batch)upd["scores."+k]=batch[k]==null?S.db.del():batch[k];/* field paths so other holes are kept */
+  try{await S.db.doc("comps/"+cid+"/players/"+pid).update(upd)}
   catch(err){writeErr(err)}
   finally{inflight[pid]=false;for(const k in batch)if(pending[pid]&&pending[pid][k]===batch[k])delete pending[pid][k];render()}
 }
-function writable(){return !S.readOnly&&S.canWrite!==false&&(S.compId==="sample"||!!S.db)}
+/* Organisers (Google sign-in, listed in /admins) can change everything; players who entered a
+   competition's code can only enter scores in it. The sample round is editable on-screen by anyone. */
+function canAdmin(){return S.compId==="sample"||(!!S.db&&S.isAdmin)}
+function canScore(comp){if(!comp)return false;if(comp.local)return true;return !!S.db&&(S.isAdmin||!!S.joined[comp.id])}
+function codeOf(c){return c.local?c.code:(S.secrets[c.id]||"")}
+let secretsUnsub=null;
+function subscribeSecrets(){
+  if(secretsUnsub)secretsUnsub();
+  secretsUnsub=S.db.collection("secrets").onSnapshot(snap=>{const m={};snap.docs.forEach(d=>m[d.id]=d.data().code||"");S.secrets=m;render(true)},()=>{});
+}
+async function checkJoined(id){
+  if(!S.db||!S.authUser||!id||id==="sample"||S.joined[id])return;
+  try{const d=await S.db.doc("comps/"+id+"/members/"+S.authUser.uid).get();if(d.exists()){S.joined[id]=true;render(true)}}catch(e){}
+}
+async function joinComp(comp,code){
+  if(!S.authUser)await S.fb.signInAnon();
+  const uid=S.fb.auth.currentUser.uid;
+  await S.db.doc("comps/"+comp.id+"/members/"+uid).set({code,joinedAt:S.db.now()});
+  S.joined[comp.id]=true;
+}
 
 /* ---------- toast ---------- */
 let toastT;function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,4200)}
@@ -367,31 +407,36 @@ function go(h){if(location.hash==="#"+h)route();else location.hash=h}
 function render(fromSnapshot){
   const conn=$("#conn");
   conn.innerHTML=S.dbState==="live"?'<span class="pill">Live scoring</span>':S.dbState==="offline"?'<span class="pill warn">Not connected</span>':S.dbState==="connecting"?"Connecting…":"";
+  const u=S.authUser,authEl=$("#auth");
+  authEl.innerHTML=!S.fb?"":u&&!u.isAnonymous
+    ?'<span class="who-chip" title="'+esc(u.email||"")+'">'+esc(S.isAdmin?"Organiser: ":"")+esc(u.displayName||u.email||"Signed in")+'</span><button class="ghost" data-signout>Sign out</button>'
+    :'<button class="ghost" data-signin>Organiser sign in</button>';
   const app=$("#app");
   if(S.view==="home")return renderHome(app);
   if(S.view==="new")return fromSnapshot?null:renderCompForm(app,null);
   const comp=curComp();
   if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">All competitions</a></div></div>':'<p class="muted">Loading competition…</p>';return}
   if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);return}
+  if(fromSnapshot&&document.activeElement&&document.activeElement.id==="j-code")return;/* don't wipe a code being typed */
   renderComp(app,comp);
 }
 
 function renderHome(app){
   let h='<div class="stack">';
   h+='<div class="comp-head"><div><div class="eyebrow">Competitions</div><h1>The board</h1></div>';
-  if(S.db&&writable())h+='<a class="btn primary" href="#new">New competition</a>';
+  if(canAdmin())h+='<a class="btn primary" href="#new">New competition</a>';
   h+='</div>';
-  if(!S.db&&S.dbState!=="connecting")h+='<div class="banner">Shared scoring isn\'t available in this view. Open the page on claude.ai while signed in to create competitions and enter live scores. You can still explore the sample round.</div>';
+  if(!S.db&&S.dbState!=="connecting")h+='<div class="banner">The scoring database can\'t be reached, so live competitions aren\'t available right now. Check your connection and reload. You can still explore the sample round.</div>';
   if(S.compsSlow)h+='<div class="banner">Competitions can\'t be reached yet. Check your connection; this page keeps trying.</div>';
-  if(S.db&&S.canWrite===false)h+='<div class="banner">You can follow the leaderboards. Entering scores needs Contributor access from the page owner.</div>';
+  if(S.authUser&&!S.authUser.isAnonymous&&!S.isAdmin)h+='<div class="banner stack" style="gap:6px"><div>You\'re signed in as <b>'+esc(S.authUser.displayName||S.authUser.email||"this account")+'</b>, which isn\'t an organiser yet. To become one, send this account ID to whoever runs Tussock Scoring:</div><div class="uid">'+esc(S.authUser.uid)+'</div></div>';
   h+='<div class="comps">';
   S.comps.forEach(c=>{
     const n=(S.entries[c.id]||[]).length;
-    h+='<a class="btn comp-card" href="#c-'+esc(c.id)+'"><span class="eyebrow">'+esc(fmtDate(c.date))+(c.code?' <span class="code">'+esc(c.code)+'</span>':'')+'</span><span class="t">'+esc(c.name)+'</span><span class="muted">'+esc(FORMATS[c.format]?FORMATS[c.format].label:c.format)+' · '+esc(c.course.name||"Course")+'</span></a>';
+    h+='<a class="btn comp-card" href="#c-'+esc(c.id)+'"><span class="eyebrow">'+esc(fmtDate(c.date))+(codeOf(c)?' <span class="code">'+esc(codeOf(c))+'</span>':'')+'</span><span class="t">'+esc(c.name)+'</span><span class="muted">'+esc(FORMATS[c.format]?FORMATS[c.format].label:c.format)+' · '+esc(c.course.name||"Course")+'</span></a>';
   });
   h+='</div>';
   if(S.db&&S.compsLoaded&&!S.comps.length){
-    h+='<div class="panel empty stack"><h2>No competitions yet</h2><p class="muted" style="max-width:60ch">Set up the course card and format, add the field with their handicap indexes, then share this page. Each group enters its own scores and the leaderboard updates for everyone.</p>'+(writable()?'<div><a class="btn primary" href="#new">Set up the first competition</a></div>':'')+'</div>';
+    h+='<div class="panel empty stack"><h2>No competitions yet</h2><p class="muted" style="max-width:60ch">Set up the course card and format, add the field with their handicap indexes, then share this page and the competition code. Each group enters its own scores and the leaderboard updates for everyone.</p>'+(canAdmin()?'<div><a class="btn primary" href="#new">Set up the first competition</a></div>':'')+'</div>';
   }
   h+='<div class="panel stack"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">Try it</div><h3>Sample medal round</h3></div><a class="btn" href="#c-sample">Open sample</a></div><p class="note">Five made-up players on a par-72 card. Changes to the sample stay on your screen and aren\'t saved.</p></div>';
   h+='</div>';
@@ -403,7 +448,7 @@ function renderComp(app,comp){
   const f=FORMATS[comp.format]||FORMATS.stroke;
   let h='';
   if(comp.local)h+='<div class="banner sample" style="margin-top:6px">Sample competition. Scores you enter here stay on this screen only.</div>';
-  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+(hasTeams(comp)?' · Pairs better-ball at '+teamAllowance(comp)+'%':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(comp.code?'<span class="code">'+esc(comp.code)+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
+  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+(hasTeams(comp)?' · Pairs better-ball at '+teamAllowance(comp)+'%':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(codeOf(comp)?'<span class="code" title="Competition code">'+esc(codeOf(comp))+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
   h+='<div class="tabs" role="tablist">';
   [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
   h+='</div><div id="tab"></div>';
@@ -493,7 +538,12 @@ function renderScore(tab,comp){
   let h='<div class="stack"><div class="panel stack"><div><div class="eyebrow">Your card</div><p class="note" style="margin:2px 0 0">Pick who you\'re marking for, up to four.</p></div><div class="chips">';
   entries.forEach(e=>{h+='<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(e.name)+'</button>'});
   h+='</div></div>';
-  if(!writable())h+='<div class="banner">You can see scores but not enter them. Entering scores needs Contributor access from the page owner.</div>';
+  if(!canScore(comp)){
+    h+='<div class="panel stack"><div><div class="eyebrow">Unlock scoring</div><h3>Enter the competition code</h3><p class="note" style="margin:2px 0 0">Ask the organiser for the code. You only need to enter it once on this phone.</p></div>';
+    if(!S.db)h+='<p class="note" style="margin:0">Scoring needs a connection. Check your signal and reload.</p>';
+    else h+='<form id="jform" class="join" novalidate><label class="f">Competition code<input id="j-code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false"></label><button class="primary" type="submit" id="jSubmit">Unlock</button></form><span class="err" id="jErr" role="alert"></span>';
+    h+='</div>';
+  }
   const sel=grp.map(id=>entries.find(e=>e.id===id)).filter(Boolean);
   if(sel.length){
     h+='<div class="panel stack"><div class="holes" role="group" aria-label="Choose hole">';
@@ -502,13 +552,25 @@ function renderScore(tab,comp){
     sel.forEach(e=>{
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
       h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
-      const dis=writable()?"":" disabled";
+      const dis=canScore(comp)?"":" disabled";
       h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(e.name)+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(e.name)+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(e.name)+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
     });
     h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div>';
   }
   h+='</div>';
   tab.innerHTML=h;
+  const jf=$("#jform");
+  if(jf)jf.onsubmit=async ev=>{
+    ev.preventDefault();
+    const code=$("#j-code").value.trim().toUpperCase(),errEl=$("#jErr");
+    if(!code){errEl.textContent="Type the code first.";return}
+    $("#jSubmit").disabled=true;errEl.textContent="";
+    try{await joinComp(comp,code);toast("Scoring unlocked for "+comp.name+".");render()}
+    catch(err){
+      errEl.textContent=err&&err.code==="permission-denied"?"That code doesn't match this competition. Check it with the organiser.":"Couldn't check the code ("+(err&&err.code||"error")+"). Check your connection and try again.";
+      $("#jSubmit").disabled=false;
+    }
+  };
 }
 function stripTP(n){return n===0?"E":n>0?"+"+n:String(n)}
 
@@ -516,7 +578,7 @@ function stripTP(n){return n===0?"E":n>0?"+"+n:String(n)}
 function renderSetup(tab,comp){
   const f=FORMATS[comp.format];
   let h='<div class="stack" id="setup-root"><div class="panel stack"><div class="row" style="justify-content:space-between"><h2>'+(comp.format==="betterball"?"Pairs":comp.format==="scramble"?"Teams":"Field")+'</h2><span class="note" id="fieldCount"></span></div><div id="elist" class="elist"></div>';
-  if(writable()){
+  if(canAdmin()){
     const team=comp.format==="betterball"||hasTeams(comp),scr=comp.format==="scramble";
     h+='<form id="eform" class="stack" style="border-top:1px solid var(--line);padding-top:14px" novalidate><h3 id="eformTitle">Add '+(scr?"a team":"a player")+'</h3><div class="grid">';
     h+='<label class="f">'+(scr?"Team name":"Name")+'<input id="e-name" required autocomplete="off"></label>';
@@ -528,13 +590,13 @@ function renderSetup(tab,comp){
     h+='<p class="note" style="margin:0">'+(scr?"Enter the team's playing handicap directly.":"Playing handicap = handicap index × slope ÷ 113 + (course rating − par), rounded, then × "+esc(comp.allowance)+"% allowance. Write a plus handicap as +1.2.")+'</p></form>';
   }
   h+='</div>';
-  if(writable()){
+  if(canAdmin()){
     h+='<div class="panel stack"><h2>Competition &amp; course</h2><div id="cform-host"></div></div>';
   }
   h+='</div>';
   tab.innerHTML=h;
   renderEntryList(comp);
-  if(writable()){compForm($("#cform-host"),comp);bindEntryForm(comp)}
+  if(canAdmin()){compForm($("#cform-host"),comp);bindEntryForm(comp)}
 }
 function renderEntryList(comp){
   const el=$("#elist");if(!el)return;
@@ -547,7 +609,7 @@ function renderEntryList(comp){
   list.forEach(e=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
     h+='<div class="erow"><div class="who"><b>'+esc(e.name)+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(e.members)+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
-    if(writable()){
+    if(canAdmin()){
       const conf=S.confirm==="e:"+e.id;
       h+='<div class="row"><button data-edit="'+esc(e.id)+'">Edit</button><button class="'+(conf?"danger":"ghost")+'" data-del="'+esc(e.id)+'">'+(conf?"Confirm remove":"Remove")+'</button></div>';
     }
@@ -602,7 +664,7 @@ function startEdit(comp,id){
 
 function renderCompForm(app,comp){
   app.innerHTML='<div class="stack"><div class="comp-head"><div><div class="eyebrow">New competition</div><h1>Set up the day</h1></div><a class="btn ghost" href="#home">Cancel</a></div><div class="panel"><div id="cform-host"></div></div></div>';
-  if(!S.db||!writable()){$("#cform-host").innerHTML='<p class="muted">Creating competitions needs a signed-in view with Contributor access.</p>';return}
+  if(!canAdmin()){$("#cform-host").innerHTML='<p class="muted">Only organisers can create competitions. Use <b>Organiser sign in</b> at the top of the page.</p>';return}
   compForm($("#cform-host"),null);
 }
 function compForm(host,comp){
@@ -611,7 +673,7 @@ function compForm(host,comp){
   const today=new Date();const iso=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
   let h='<form id="cform" class="stack" novalidate><div class="grid">';
   h+='<label class="f">Competition name<input id="f-name" value="'+esc(comp?comp.name:"")+'" placeholder="e.g. Saturday Stableford" autocomplete="off"></label>';
-  h+='<label class="f">Code<input id="f-code" value="'+esc(comp&&comp.code||"")+'" placeholder="e.g. SAT14NOV" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="codeHelp"></label>';
+  h+='<label class="f">Code<input id="f-code" value="'+esc(comp&&codeOf(comp)||"")+'" placeholder="e.g. SAT14NOV" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="codeHelp"></label>';
   h+='<label class="f">Date<input id="f-date" type="date" value="'+esc(comp?comp.date:iso)+'"></label>';
   h+='<label class="f">Format<select id="f-format">'+Object.entries(FORMATS).map(([k,v])=>'<option value="'+k+'"'+(k===fmt?" selected":"")+'>'+v.label+'</option>').join("")+'</select></label>';
   h+='<label class="f" id="allowWrap">Handicap allowance %<input id="f-allow" inputmode="numeric" value="'+esc(comp?comp.allowance:FORMATS[fmt].allowance)+'"></label>';
@@ -631,7 +693,7 @@ function compForm(host,comp){
   for(let k=0;k<18;k++)h+='<td><input id="si-'+(k+1)+'" inputmode="numeric" value="'+c.si[k]+'" aria-label="Stroke index hole '+(k+1)+'"></td>';
   h+='<td></td></tr></tbody></table></div><p class="note" style="margin:6px 0 0">Copy these from the scorecard. Stroke index 1 is the hardest hole and gets the first handicap stroke.</p></div>';
   h+='<div class="row"><button class="primary" type="submit" id="cSubmit">'+(comp?"Save changes":"Create competition")+'</button><span class="err" id="cErr"></span></div>';
-  if(comp&&!comp.local&&S.canEdit)h+='<div style="border-top:1px solid var(--line);padding-top:14px" class="row"><button type="button" class="'+(S.confirm==="comp"?"danger":"ghost")+'" id="cDel">'+(S.confirm==="comp"?"Confirm: delete competition and all scores":"Delete competition")+'</button></div>';
+  if(comp&&!comp.local&&S.isAdmin)h+='<div style="border-top:1px solid var(--line);padding-top:14px" class="row"><button type="button" class="'+(S.confirm==="comp"?"danger":"ghost")+'" id="cDel">'+(S.confirm==="comp"?"Confirm: delete competition and all scores":"Delete competition")+'</button></div>';
   h+='</form>';
   host.innerHTML=h;
   const upd=()=>{const k=$("#f-format").value;$("#fmtBlurb").textContent=FORMATS[k].blurb;$("#allowWrap").hidden=k==="scramble";$("#teamWrap").hidden=!(k==="stroke"||k==="stableford");$("#tAllowWrap").hidden=!$("#f-teams").checked;let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
@@ -643,7 +705,14 @@ function compForm(host,comp){
   if(del)del.onclick=async()=>{
     if(S.confirm!=="comp"){S.confirm="comp";compForm(host,comp);setTimeout(()=>{if(S.confirm==="comp"){S.confirm=null;if(document.body.contains(host))compForm(host,comp)}},5000);return}
     S.confirm=null;del.disabled=true;
-    try{for(const e of curEntries())await S.db.doc("comps/"+comp.id+"/players/"+e.id).delete();await S.db.doc("comps/"+comp.id).delete();toast("Deleted "+comp.name+".");go("home")}
+    try{
+      for(const e of curEntries())await S.db.doc("comps/"+comp.id+"/players/"+e.id).delete();
+      const mem=await S.db.collection("comps/"+comp.id+"/members").get();
+      for(const d of mem.docs)await S.db.doc("comps/"+comp.id+"/members/"+d.id).delete();
+      await S.db.doc("secrets/"+comp.id).delete();
+      await S.db.doc("comps/"+comp.id).delete();
+      toast("Deleted "+comp.name+".");go("home");
+    }
     catch(err){writeErr(err)}
   };
   $("#cform").onsubmit=async ev=>{
@@ -653,7 +722,7 @@ function compForm(host,comp){
     const code=$("#f-code").value.trim().toUpperCase();
     if(!code)return err("Give the competition a code.");
     if(!/^[A-Z0-9]{1,12}$/.test(code))return err("The code can only use letters and numbers (no spaces or symbols), up to 12 characters.");
-    const clash=S.comps.find(x=>(x.code||"").toUpperCase()===code&&(!comp||x.id!==comp.id));
+    const clash=S.comps.find(x=>codeOf(x).toUpperCase()===code&&(!comp||x.id!==comp.id));
     if(clash)return err("Code "+code+" is already used by "+clash.name+". Pick another.");
     const format=$("#f-format").value;
     const allowance=format==="scramble"?100:parseFloat($("#f-allow").value);
@@ -667,12 +736,20 @@ function compForm(host,comp){
     const teamsOn=(format==="stroke"||format==="stableford")&&$("#f-teams").checked;
     const tallow=parseFloat($("#f-tallow").value);
     if(teamsOn&&!(tallow>0&&tallow<=100))return err("Pairs allowance must be between 1 and 100%.");
-    const data={name,code,date:$("#f-date").value,format,allowance,teams:{enabled:teamsOn,allowance:teamsOn?tallow:85},course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
-    if(comp&&comp.local){Object.assign(SAMPLE,data);toast("Sample updated on this screen.");render();return}
+    /* The code is kept out of the public competition document, in /secrets, which only organisers can read. */
+    const data={name,date:$("#f-date").value,format,allowance,teams:{enabled:teamsOn,allowance:teamsOn?tallow:85},course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
+    if(comp&&comp.local){Object.assign(SAMPLE,data,{code});toast("Sample updated on this screen.");render();return}
     $("#cSubmit").disabled=true;
     try{
-      if(comp){await S.db.doc("comps/"+comp.id).update(data);toast("Saved.");render()}
-      else{const ref=await S.db.collection("comps").add(Object.assign({createdAt:Date.now()},data));go("c-"+ref.id+"-setup")}
+      if(comp){
+        await S.db.doc("comps/"+comp.id).update(data);
+        if(codeOf(comp)!==code)await S.db.doc("secrets/"+comp.id).set({code});
+        toast("Saved.");render();
+      }else{
+        const ref=await S.db.collection("comps").add(Object.assign({createdAt:Date.now()},data));
+        await S.db.doc("secrets/"+ref.id).set({code});
+        go("c-"+ref.id+"-setup");
+      }
     }catch(e){writeErr(e);$("#cSubmit").disabled=false}
   };
 }
@@ -682,6 +759,11 @@ document.addEventListener("click",ev=>{
   const t=ev.target.closest("button,[data-card]");if(!t)return;
   const comp=curComp();
   if(t.dataset.go){go(t.dataset.go);return}
+  if(t.dataset.signin!==undefined&&S.fb){
+    S.fb.google().catch(err=>{if(err&&err.code!=="auth/popup-closed-by-user"&&err.code!=="auth/cancelled-popup-request")toast("Sign-in didn't work ("+(err.code||"error")+"). Try again.")});
+    return;
+  }
+  if(t.dataset.signout!==undefined&&S.fb){S.fb.signOut().then(()=>toast("Signed out."));return}
   if(t.dataset.mode){S.boardMode=t.dataset.mode;render();return}
   if(t.dataset.kind){S.boardKind=t.dataset.kind;S.openCard=null;LS.set("kind",S.boardKind);render();return}
   if(t.dataset.card){S.openCard=S.openCard===t.dataset.card?null:t.dataset.card;render();return}
@@ -692,7 +774,7 @@ document.addEventListener("click",ev=>{
     LS.set(groupKey(comp),g);render();return;
   }
   if(t.dataset.hole&&comp){S.hole=+t.dataset.hole;LS.set("hole:"+comp.id,S.hole);render();return}
-  if((t.dataset.step||t.dataset.pick)&&comp&&writable()){
+  if((t.dataset.step||t.dataset.pick)&&comp&&canScore(comp)){
     const id=t.dataset.e||t.dataset.pick,e=curEntries().find(x=>x.id===id);if(!e)return;
     const par=comp.course.pars[S.hole-1],cur=scoreAt(e,S.hole);
     let v;
@@ -713,17 +795,48 @@ window.addEventListener("hashchange",route);
 
 /* ---------- boot ---------- */
 route();
+/* A small wrapper so the rest of the app keeps its simple db.collection(path) / db.doc(path) calls. */
+function makeDb(fdb){
+  return {
+    collection(p){const ref=fsCollection(fdb,p);return {
+      onSnapshot:(cb,err)=>onSnapshot(ref,{includeMetadataChanges:true},cb,err),
+      add:d=>addDoc(ref,d),
+      get:()=>getDocs(ref)
+    }},
+    doc(p){const ref=fsDoc(fdb,p);return {
+      update:d=>updateDoc(ref,d),
+      set:d=>setDoc(ref,d),
+      delete:()=>deleteDoc(ref),
+      get:()=>getDoc(ref)
+    }},
+    del:()=>deleteField(),
+    now:()=>serverTimestamp()
+  };
+}
 (async function(){
-  const cl=window.claude;
-  if(!cl||!cl.use){S.dbState="offline";render();return}
-  const [db,user]=await Promise.all([cl.use("db"),cl.use("user")]);
-  S.user=user;
-  if(user){try{S.canWrite=await user.can("data.write")}catch(e){}try{S.canEdit=await user.canEdit()}catch(e){}}
-  if(!db){S.dbState="offline";render();return}
-  S.db=db;S.dbState="live";
+  let fdb,auth;
+  try{
+    const app=initializeApp(firebaseConfig);
+    /* Offline cache: scores entered with no signal are kept on the phone and sent when it reconnects. */
+    fdb=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})});
+    auth=getAuth(app);
+  }catch(e){console.error(e);S.dbState="offline";render();return}
+  S.db=makeDb(fdb);S.dbState="live";
+  S.fb={auth,signInAnon:()=>signInAnonymously(auth),google:()=>signInWithPopup(auth,new GoogleAuthProvider()),signOut:()=>signOut(auth)};
   subscribeComps();
   if(S.view==="comp"){entriesFor=null;subscribeEntries(S.compId)}
+  onAuthStateChanged(auth,async u=>{
+    S.authUser=u;S.isAdmin=false;S.joined={};
+    if(secretsUnsub){secretsUnsub();secretsUnsub=null}
+    S.secrets={};
+    if(u&&!u.isAnonymous){try{S.isAdmin=(await S.db.doc("admins/"+u.uid).get()).exists()}catch(e){}}
+    if(S.isAdmin)subscribeSecrets();
+    if(u&&S.view==="comp")checkJoined(S.compId);
+    render();
+  });
   render();
 })();
 })();
 </script>
+</body>
+</html>

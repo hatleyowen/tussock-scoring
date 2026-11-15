@@ -3,3 +3,8 @@ Thumbs.db
 desktop.ini
 node_modules/
 .claude/settings.local.json
+package-lock.json
+# Firebase service account keys and data exports hold secrets or personal data: never commit them
+*service-account*.json
+*firebase-adminsdk*.json
+export/
