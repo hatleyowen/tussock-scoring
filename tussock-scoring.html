@@ -490,14 +490,9 @@ function renderScore(tab,comp){
     h+='<div class="panel stack"><div class="holes" role="group" aria-label="Choose hole">';
     for(let k=1;k<=18;k++){const done=sel.every(e=>scoreAt(e,k)!=null);h+='<button data-hole="'+k+'" aria-current="'+(k===hole)+'" class="'+(done?"done":"")+'" aria-label="Hole '+k+(done?", scored":"")+'">'+k+'</button>'}
     h+='</div><div class="hole-head"><button aria-label="Previous hole" data-hole="'+(hole>1?hole-1:18)+'">‹</button><div style="text-align:center"><div class="eyebrow">Hole</div><div class="h">'+hole+'</div></div><div class="meta"><span>Par <b>'+c.pars[i]+'</b></span><span>S.I. <b>'+c.si[i]+'</b></span></div><button aria-label="Next hole" data-hole="'+(hole<18?hole+1:1)+'">›</button></div>';
-    const pairs=hasTeams(comp)?teamRows(comp,entries,true):[];
     sel.forEach(e=>{
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
-      const pr=pairs.find(p=>p.members.some(m=>m.e.id===e.id));
-      let res="";
-      if(v!=null){res=holeWord(v,H.par);if(v!=="P"&&H.rec)res+=" · net "+H.net;if(points)res+=" · "+H.pts+" pt"+(H.pts===1?"":"s")}
-      const run=points?ev.pts+" pts":(ev.pickup?"NR":"Net "+stripTP(ev.netTP));
-      h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div><div class="res">Hcp '+ev.ph+' · thru '+ev.thru+' · '+run+(res?' — <b>'+esc(res)+'</b>':'')+'</div>'+(pr?'<div class="res">'+esc(pr.name)+': '+pr.pts+' better-ball pts thru '+pr.thru+'</div>':'')+'</div>';
+      h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
       const dis=writable()?"":" disabled";
       h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(e.name)+'"'+dis+'>−</button><span class="val" aria-live="polite">'+(v==null?'<span class="muted">–</span>':esc(v))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(e.name)+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(e.name)+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
     });
