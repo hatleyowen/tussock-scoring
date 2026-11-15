@@ -29,6 +29,6 @@ A single file, `tussock-scoring.html`: plain HTML, CSS and JavaScript, with no b
 Shared data uses the claude.ai Artifact runtime (`claude.use("db")` and `claude.use("user")`):
 
 - `comps/{compId}`: competition settings, course card (`pars`, `si`, `rating`, `slope`) and the optional pairs game (`teams: {enabled, allowance}`)
-- `comps/{compId}/players/{entryId}`: entry name, handicap index, pair/team, and `scores` as a map of hole number to strokes (or `"P"` for a pickup)
+- `comps/{compId}/players/{entryId}`: entry name, handicap index, NZ Golf member number (`golfNo`, optional), pair/team, and `scores` as a map of hole number to strokes (or `"P"` for a pickup)
 
 If you open the file directly in a browser, there's no database, so only the in-memory sample round works. To run it standalone you'd swap the `db` calls for another backend (for example Firebase, Supabase or a small API).

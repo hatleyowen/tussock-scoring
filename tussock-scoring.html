@@ -521,6 +521,7 @@ function renderSetup(tab,comp){
     h+='<form id="eform" class="stack" style="border-top:1px solid var(--line);padding-top:14px" novalidate><h3 id="eformTitle">Add '+(scr?"a team":"a player")+'</h3><div class="grid">';
     h+='<label class="f">'+(scr?"Team name":"Name")+'<input id="e-name" required autocomplete="off"></label>';
     h+='<label class="f">'+(scr?"Team handicap":"Handicap index")+'<input id="e-index" inputmode="decimal" placeholder="'+(scr?"e.g. 6":"e.g. 12.4 or +1.2")+'"></label>';
+    if(!scr)h+='<label class="f">NZ Golf number<input id="e-golfno" inputmode="numeric" placeholder="e.g. 3156846" maxlength="10" autocomplete="off"></label>';
     if(team)h+='<label class="f">Pair name<input id="e-team" placeholder="Same name for both partners" autocomplete="off"></label>';
     if(scr)h+='<label class="f">Players<input id="e-members" placeholder="Names, comma separated" autocomplete="off"></label>';
     h+='</div><div class="row"><button class="primary" type="submit" id="eSubmit">Add</button><button type="button" class="ghost" id="eCancel" hidden>Cancel</button><span class="err" id="eErr"></span></div>';
@@ -545,7 +546,7 @@ function renderEntryList(comp){
   let h="";
   list.forEach(e=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
-    h+='<div class="erow"><div class="who"><b>'+esc(e.name)+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(e.members)+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
+    h+='<div class="erow"><div class="who"><b>'+esc(e.name)+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(e.members)+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
     if(writable()){
       const conf=S.confirm==="e:"+e.id;
       h+='<div class="row"><button data-edit="'+esc(e.id)+'">Edit</button><button class="'+(conf?"danger":"ghost")+'" data-del="'+esc(e.id)+'">'+(conf?"Confirm remove":"Remove")+'</button></div>';
@@ -566,6 +567,11 @@ function bindEntryForm(comp){
     if(!name){$("#eErr").textContent="Add a name.";return}
     if(isNaN(idx)||idx<-10||idx>54){$("#eErr").textContent="Handicap must be a number between +10 and 54.";return}
     const data={name,index:idx};
+    if($("#e-golfno")){
+      const no=$("#e-golfno").value.replace(/\s+/g,"");
+      if(no&&!/^\d{4,10}$/.test(no)){$("#eErr").textContent="NZ Golf number should be digits only, e.g. 3156846.";return}
+      data.golfNo=no;
+    }
     if($("#e-team"))data.team=$("#e-team").value.trim();
     if($("#e-members"))data.members=$("#e-members").value.trim();
     const editing=S.editEntry;
@@ -587,6 +593,7 @@ function startEdit(comp,id){
   const e=curEntries().find(x=>x.id===id);if(!e)return;
   S.editEntry=id;
   $("#e-name").value=e.name||"";$("#e-index").value=e.index?fmtIdx(e.index):"";
+  if($("#e-golfno"))$("#e-golfno").value=e.golfNo||"";
   if($("#e-team"))$("#e-team").value=e.team||"";
   if($("#e-members"))$("#e-members").value=e.members||"";
   $("#eformTitle").textContent="Edit "+e.name;$("#eSubmit").textContent="Save";$("#eCancel").hidden=false;
