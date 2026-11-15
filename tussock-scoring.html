@@ -142,6 +142,8 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
 .erow{display:flex;gap:10px;align-items:center;justify-content:space-between;padding-block:10px;border-top:1px solid var(--line);flex-wrap:wrap}
 .erow .who{min-width:0;flex:1 1 180px}
 .err{color:var(--under);font-size:13px}
+.code{font-family:var(--f-mono);font-size:12px;font-weight:500;letter-spacing:.08em;padding:1px 7px;border:1px solid var(--line);border-radius:4px;color:var(--fg);background:var(--sunk)}
+#f-code{font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.08em}
 @media (max-width:560px){
   .tabs{gap:0}
   .tabs button{font-size:16px;padding:8px 10px;letter-spacing:.02em}
@@ -196,7 +198,7 @@ const pending={};
 
 /* ---------- sample competition (in memory only) ---------- */
 function mkScores(arr){const o={};arr.forEach((v,i)=>{if(v!=null)o[i+1]=v});return o}
-const SAMPLE={id:"sample",local:true,name:"Sample: November Medal",date:"2026-11-14",format:"stroke",allowance:95,teams:{enabled:true,allowance:85},
+const SAMPLE={id:"sample",local:true,code:"SAMPLE1",name:"Sample: November Medal",date:"2026-11-14",format:"stroke",allowance:95,teams:{enabled:true,allowance:85},
   course:{name:"Sample course, white tees",slope:128,rating:71.4,pars:PAR_DEFAULT.slice(),si:SI_DEFAULT.slice()}};
 const SAMPLE_ENTRIES=[
   {id:"s1",name:"A. Player",index:8.4,team:"Pair 1",scores:mkScores([4,5,3,5,4,4,2,5,5,4,3,6,4,5,4,3,4,5])},
@@ -385,7 +387,7 @@ function renderHome(app){
   h+='<div class="comps">';
   S.comps.forEach(c=>{
     const n=(S.entries[c.id]||[]).length;
-    h+='<a class="btn comp-card" href="#c-'+esc(c.id)+'"><span class="eyebrow">'+esc(fmtDate(c.date))+'</span><span class="t">'+esc(c.name)+'</span><span class="muted">'+esc(FORMATS[c.format]?FORMATS[c.format].label:c.format)+' · '+esc(c.course.name||"Course")+'</span></a>';
+    h+='<a class="btn comp-card" href="#c-'+esc(c.id)+'"><span class="eyebrow">'+esc(fmtDate(c.date))+(c.code?' <span class="code">'+esc(c.code)+'</span>':'')+'</span><span class="t">'+esc(c.name)+'</span><span class="muted">'+esc(FORMATS[c.format]?FORMATS[c.format].label:c.format)+' · '+esc(c.course.name||"Course")+'</span></a>';
   });
   h+='</div>';
   if(S.db&&S.compsLoaded&&!S.comps.length){
@@ -401,7 +403,7 @@ function renderComp(app,comp){
   const f=FORMATS[comp.format]||FORMATS.stroke;
   let h='';
   if(comp.local)h+='<div class="banner sample" style="margin-top:6px">Sample competition. Scores you enter here stay on this screen only.</div>';
-  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+(hasTeams(comp)?' · Pairs better-ball at '+teamAllowance(comp)+'%':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
+  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+(hasTeams(comp)?' · Pairs better-ball at '+teamAllowance(comp)+'%':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(comp.code?'<span class="code">'+esc(comp.code)+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
   h+='<div class="tabs" role="tablist">';
   [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
   h+='</div><div id="tab"></div>';
@@ -602,10 +604,11 @@ function compForm(host,comp){
   const today=new Date();const iso=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
   let h='<form id="cform" class="stack" novalidate><div class="grid">';
   h+='<label class="f">Competition name<input id="f-name" value="'+esc(comp?comp.name:"")+'" placeholder="e.g. Saturday Stableford" autocomplete="off"></label>';
+  h+='<label class="f">Code<input id="f-code" value="'+esc(comp&&comp.code||"")+'" placeholder="e.g. SAT14NOV" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="codeHelp"></label>';
   h+='<label class="f">Date<input id="f-date" type="date" value="'+esc(comp?comp.date:iso)+'"></label>';
   h+='<label class="f">Format<select id="f-format">'+Object.entries(FORMATS).map(([k,v])=>'<option value="'+k+'"'+(k===fmt?" selected":"")+'>'+v.label+'</option>').join("")+'</select></label>';
   h+='<label class="f" id="allowWrap">Handicap allowance %<input id="f-allow" inputmode="numeric" value="'+esc(comp?comp.allowance:FORMATS[fmt].allowance)+'"></label>';
-  h+='</div><p class="note" id="fmtBlurb" style="margin:0"></p>';
+  h+='</div><p class="note" id="codeHelp" style="margin:0">Code: letters and numbers only, up to 12 characters, different from every other competition.</p><p class="note" id="fmtBlurb" style="margin:0"></p>';
   const tOn=!!(comp&&comp.teams&&comp.teams.enabled),tAl=comp?teamAllowance(comp):85;
   h+='<div id="teamWrap" class="banner stack" style="gap:10px"><label class="row" style="gap:10px;font-weight:600;cursor:pointer"><input type="checkbox" id="f-teams" style="width:20px;min-height:20px;margin:0"'+(tOn?" checked":"")+'> Also run a pairs competition (better-ball Stableford)</label>';
   h+='<p class="note" style="margin:0">Same scores, second leaderboard. Partners share a pair name, and the better Stableford score of the two counts on each hole.</p>';
@@ -640,6 +643,11 @@ function compForm(host,comp){
     ev.preventDefault();
     const err=m=>{$("#cErr").textContent=m};
     const name=$("#f-name").value.trim();if(!name)return err("Give the competition a name.");
+    const code=$("#f-code").value.trim().toUpperCase();
+    if(!code)return err("Give the competition a code.");
+    if(!/^[A-Z0-9]{1,12}$/.test(code))return err("The code can only use letters and numbers (no spaces or symbols), up to 12 characters.");
+    const clash=S.comps.find(x=>(x.code||"").toUpperCase()===code&&(!comp||x.id!==comp.id));
+    if(clash)return err("Code "+code+" is already used by "+clash.name+". Pick another.");
     const format=$("#f-format").value;
     const allowance=format==="scramble"?100:parseFloat($("#f-allow").value);
     if(!(allowance>0&&allowance<=100))return err("Allowance must be between 1 and 100%.");
@@ -652,7 +660,7 @@ function compForm(host,comp){
     const teamsOn=(format==="stroke"||format==="stableford")&&$("#f-teams").checked;
     const tallow=parseFloat($("#f-tallow").value);
     if(teamsOn&&!(tallow>0&&tallow<=100))return err("Pairs allowance must be between 1 and 100%.");
-    const data={name,date:$("#f-date").value,format,allowance,teams:{enabled:teamsOn,allowance:teamsOn?tallow:85},course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
+    const data={name,code,date:$("#f-date").value,format,allowance,teams:{enabled:teamsOn,allowance:teamsOn?tallow:85},course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
     if(comp&&comp.local){Object.assign(SAMPLE,data);toast("Sample updated on this screen.");render();return}
     $("#cSubmit").disabled=true;
     try{
