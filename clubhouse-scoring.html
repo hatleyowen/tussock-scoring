@@ -84,6 +84,8 @@ table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .seg button{border:none;border-radius:0;min-height:34px;padding:4px 12px;background:var(--surface);color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.seg.kind{display:flex;max-width:100%}
+.seg.kind button{flex:1 1 0;min-height:44px;font-family:var(--f-display);font-size:17px;letter-spacing:.03em;text-transform:uppercase;padding:6px 12px;line-height:1.1}
 
 /* Scorecard grid */
 .sc-wrap{overflow-x:auto;padding:0 12px}
@@ -169,18 +171,18 @@ const LS={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return 
 
 const S={db:null,user:null,dbState:"connecting",canWrite:null,canEdit:false,readOnly:false,
   comps:[],compsLoaded:false,compsSlow:false,entries:{},entriesLoaded:{},
-  view:"home",compId:null,tab:"board",boardMode:"net",openCard:null,hole:1,editEntry:null,confirm:null};
+  view:"home",compId:null,tab:"board",boardMode:"net",boardKind:(LS.get("kind")==="team"?"team":"ind"),openCard:null,hole:1,editEntry:null,confirm:null};
 const pending={};
 
 /* ---------- sample competition (in memory only) ---------- */
 function mkScores(arr){const o={};arr.forEach((v,i)=>{if(v!=null)o[i+1]=v});return o}
-const SAMPLE={id:"sample",local:true,name:"Sample: November Medal",date:"2026-11-14",format:"stroke",allowance:95,
+const SAMPLE={id:"sample",local:true,name:"Sample: November Medal",date:"2026-11-14",format:"stroke",allowance:95,teams:{enabled:true,allowance:85},
   course:{name:"Sample course, white tees",slope:128,rating:71.4,pars:PAR_DEFAULT.slice(),si:SI_DEFAULT.slice()}};
 const SAMPLE_ENTRIES=[
-  {id:"s1",name:"A. Player",index:8.4,scores:mkScores([4,5,3,5,4,4,2,5,5,4,3,6,4,5,4,3,4,5])},
-  {id:"s2",name:"B. Player",index:14.2,scores:mkScores([5,4,4,6,5,4,3,5,5,5,4,5,4,5,5,3,5,6])},
-  {id:"s3",name:"C. Player",index:3.1,scores:mkScores([4,4,3,4,4,5,3,4,5,4,3,5,4,4,4,3])},
-  {id:"s4",name:"D. Player",index:21.6,scores:mkScores([6,5,4,6,5,6,4,5,7,5,4,6,"P",5,5,4,5,6])},
+  {id:"s1",name:"A. Player",index:8.4,team:"Pair 1",scores:mkScores([4,5,3,5,4,4,2,5,5,4,3,6,4,5,4,3,4,5])},
+  {id:"s2",name:"B. Player",index:14.2,team:"Pair 2",scores:mkScores([5,4,4,6,5,4,3,5,5,5,4,5,4,5,5,3,5,6])},
+  {id:"s3",name:"C. Player",index:3.1,team:"Pair 1",scores:mkScores([4,4,3,4,4,5,3,4,5,4,3,5,4,4,4,3])},
+  {id:"s4",name:"D. Player",index:21.6,team:"Pair 2",scores:mkScores([6,5,4,6,5,6,4,5,7,5,4,6,"P",5,5,4,5,6])},
   {id:"s5",name:"E. Player",index:11.0,scores:mkScores([5,4,3,5,5,4,3,5,6,4,4,5])}
 ];
 
@@ -211,9 +213,12 @@ function evalEntry(e,comp){
   }
   return {key:e.id,name:e.name,sub:e.members||"",e,ph,phLabel:String(ph),holes,thru,gross,pts,netTP,grossTP,pickup,complete:thru===18};
 }
-function teamRows(comp,entries){
+function hasTeams(comp){return !!(comp.teams&&comp.teams.enabled)&&(comp.format==="stroke"||comp.format==="stableford")}
+function teamAllowance(comp){const a=Number(comp.teams&&comp.teams.allowance);return a>0?a:85}
+function teamRows(comp,entries,sideGame){
   const groups=new Map();
-  entries.forEach(e=>{const k=(e.team||"").trim()||("Unpaired: "+e.name);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(evalEntry(e,comp))});
+  const tc=sideGame?Object.assign({},comp,{allowance:teamAllowance(comp)}):comp;
+  entries.forEach(e=>{const t=(e.team||"").trim();if(!t&&sideGame)return;const k=t||("Unpaired: "+e.name);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(evalEntry(e,tc))});
   return [...groups].map(([name,evs])=>{
     const holes=[];let thru=0,pts=0;
     for(let i=0;i<18;i++){
@@ -231,9 +236,10 @@ function segs(r,mode){
   const s=(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=H[i].g;return t};const ph=mode==="net"?r.ph:0;
   return [s(9,18)-ph/2,s(12,18)-ph/3,s(15,18)-ph/6,s(17,18)-ph/18];
 }
-function buildBoard(comp,entries,mode){
-  const points=FORMATS[comp.format].scoring==="points";
-  const rows=comp.format==="betterball"?teamRows(comp,entries):entries.map(e=>evalEntry(e,comp));
+function buildBoard(comp,entries,mode,kind){
+  const side=kind==="team";
+  const points=side||FORMATS[comp.format].scoring==="points";
+  const rows=side||comp.format==="betterball"?teamRows(comp,entries,side):entries.map(e=>evalEntry(e,comp));
   const segMode=points?"pts":mode;
   rows.forEach(r=>{r.started=r.thru>0;r.nr=!points&&r.pickup;r.main=points?r.pts:(mode==="net"?r.netTP:r.grossTP);r.sg=r.complete&&!r.nr?segs(r,segMode):null});
   const sign=points?-1:1;
@@ -375,7 +381,7 @@ function renderComp(app,comp){
   const f=FORMATS[comp.format]||FORMATS.stroke;
   let h='';
   if(comp.local)h+='<div class="banner sample" style="margin-top:6px">Sample competition. Scores you enter here stay on this screen only.</div>';
-  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
+  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+(hasTeams(comp)?' · Pairs better-ball at '+teamAllowance(comp)+'%':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
   h+='<div class="tabs" role="tablist">';
   [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
   h+='</div><div id="tab"></div>';
@@ -391,14 +397,26 @@ function renderBoard(tab,comp){
   const entries=curEntries();
   const f=FORMATS[comp.format];
   if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>No one in the field yet</h2><p class="muted">Add players under Field &amp; course, then scores appear here as they come in.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Add players</button></div></div>';return}
-  const mode=f.scoring==="strokes"?S.boardMode:"pts";
-  const {rows,points}=buildBoard(comp,entries,mode);
+  const teams=hasTeams(comp),kind=teams&&S.boardKind==="team"?"team":"ind";
+  const isPairs=kind==="team"||comp.format==="betterball";
+  const mode=kind==="ind"&&f.scoring==="strokes"?S.boardMode:"pts";
+  const {rows,points}=buildBoard(comp,entries,mode,kind);
+  let h='';
+  if(teams){
+    h+='<div class="seg kind" role="group" aria-label="Competition" style="margin-bottom:14px"><button aria-pressed="'+(kind==="ind")+'" data-kind="ind">Individual · '+esc(f.label)+'</button><button aria-pressed="'+(kind==="team")+'" data-kind="team">Pairs · Better-ball Stableford</button></div>';
+  }
+  if(kind==="team"&&!rows.length){
+    tab.innerHTML=h+'<div class="panel empty stack"><h2>No pairs yet</h2><p class="muted" style="max-width:60ch">Give both partners the same pair name under Field &amp; course. Their individual scores feed this leaderboard automatically, off '+teamAllowance(comp)+'% of handicap.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Set up pairs</button></div></div>';
+    return;
+  }
   const done=rows.filter(r=>r.complete).length,started=rows.filter(r=>r.started).length;
-  let h='<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row">';
+  h+='<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row">';
   h+=started&&done<rows.length?'<span class="pill live">Live</span>':done===rows.length?'<span class="pill">Final</span>':'<span class="pill warn">Not started</span>';
-  h+='<span class="note">'+done+' of '+rows.length+' '+(comp.format==="betterball"?"pairs":comp.format==="scramble"?"teams":"cards")+' complete</span></div>';
+  h+='<span class="note">'+done+' of '+rows.length+' '+(isPairs?"pairs":comp.format==="scramble"?"teams":"cards")+' complete';
+  if(kind==="team"){const unp=entries.filter(e=>!(e.team||"").trim()).length;h+=' · '+teamAllowance(comp)+'% allowance'+(unp?' · '+unp+' player'+(unp===1?'':'s')+' not in a pair':'')}
+  h+='</span></div>';
   if(!points)h+='<div class="seg" role="group" aria-label="Leaderboard type"><button aria-pressed="'+(S.boardMode==="net")+'" data-mode="net">Net</button><button aria-pressed="'+(S.boardMode==="gross")+'" data-mode="gross">Gross</button></div>';
-  h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(comp.format==="betterball"?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th>'+(comp.format==="scramble"?"Team hcp":"Playing hcp")+'</th>';
+  h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(isPairs?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th>'+(comp.format==="scramble"?"Team hcp":"Playing hcp")+'</th>';
   h+=points?'<th>Points</th>':'<th>Gross</th><th>'+(mode==="net"?"Net":"")+'</th><th>To par</th>';
   h+='</tr></thead><tbody>';
   const cols=points?5:7;
@@ -413,13 +431,13 @@ function renderBoard(tab,comp){
       h+='<td><span class="big">'+(!r.started?"–":r.nr?'<span class="muted">NR</span>':toPar(r.main))+'</span></td>';
     }
     h+='</tr>';
-    if(S.openCard===r.key)h+='<tr class="card-row"><td colspan="'+cols+'">'+cardHtml(comp,r)+'</td></tr>';
+    if(S.openCard===r.key)h+='<tr class="card-row"><td colspan="'+cols+'">'+cardHtml(comp,r,points)+'</td></tr>';
   });
   h+='</tbody></table></div>';
   h+='<p class="note" style="margin-top:10px">Tap a row to see the card. '+(points?'Stableford points: 2 for a net par, 1 more per stroke under.':'NR: no return, the player picked up on a hole.')+' Ties on completed cards go to countback over the last 9, 6, 3 and 1 holes'+(points?'':(mode==="net"?', using ½, ⅓, ⅙ and 1/18 of the handicap':''))+'.</p>';
   tab.innerHTML=h;
 }
-function cardHtml(comp,r){
+function cardHtml(comp,r,points){
   const c=comp.course;
   const lines=r.team?r.members:[r];
   const range=(a,b)=>{const o=[];for(let i=a;i<b;i++)o.push(i);return o};
@@ -432,7 +450,7 @@ function cardHtml(comp,r){
   lines.forEach(L=>{
     const hasP=L.holes.some(x=>x.g==="P");
     h+=rowOf(r.team?esc(String(L.name).slice(0,12)):"Score",i=>mark(L.holes[i].g,c.pars[i])+(L.holes[i].rec>0?'<div class="dots">'+"•".repeat(L.holes[i].rec)+'</div>':""),(a,b)=>{if(hasP&&b-a===18)return"NR";let t=0,any=false;for(let i=a;i<b;i++){if(typeof L.holes[i].g==="number"){t+=L.holes[i].g;any=true}}return any?t:""});
-    if(FORMATS[comp.format].scoring==="points")h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=L.holes[i].pts||0;return t});
+    if(points)h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=L.holes[i].pts||0;return t});
   });
   if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
   h+='</tbody></table></div>';
@@ -456,12 +474,14 @@ function renderScore(tab,comp){
     h+='<div class="panel stack"><div class="holes" role="group" aria-label="Choose hole">';
     for(let k=1;k<=18;k++){const done=sel.every(e=>scoreAt(e,k)!=null);h+='<button data-hole="'+k+'" aria-current="'+(k===hole)+'" class="'+(done?"done":"")+'" aria-label="Hole '+k+(done?", scored":"")+'">'+k+'</button>'}
     h+='</div><div class="hole-head"><button aria-label="Previous hole" data-hole="'+(hole>1?hole-1:18)+'">‹</button><div style="text-align:center"><div class="eyebrow">Hole</div><div class="h">'+hole+'</div></div><div class="meta"><span>Par <b>'+c.pars[i]+'</b></span><span>S.I. <b>'+c.si[i]+'</b></span></div><button aria-label="Next hole" data-hole="'+(hole<18?hole+1:1)+'">›</button></div>';
+    const pairs=hasTeams(comp)?teamRows(comp,entries,true):[];
     sel.forEach(e=>{
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
+      const pr=pairs.find(p=>p.members.some(m=>m.e.id===e.id));
       let res="";
       if(v!=null){res=holeWord(v,H.par);if(v!=="P"&&H.rec)res+=" · net "+H.net;if(points)res+=" · "+H.pts+" pt"+(H.pts===1?"":"s")}
       const run=points?ev.pts+" pts":(ev.pickup?"NR":"Net "+stripTP(ev.netTP));
-      h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div><div class="res">Hcp '+ev.ph+' · thru '+ev.thru+' · '+run+(res?' — <b>'+esc(res)+'</b>':'')+'</div></div>';
+      h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div><div class="res">Hcp '+ev.ph+' · thru '+ev.thru+' · '+run+(res?' — <b>'+esc(res)+'</b>':'')+'</div>'+(pr?'<div class="res">'+esc(pr.name)+': '+pr.pts+' better-ball pts thru '+pr.thru+'</div>':'')+'</div>';
       const dis=writable()?"":" disabled";
       h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(e.name)+'"'+dis+'>−</button><span class="val" aria-live="polite">'+(v==null?'<span class="muted">–</span>':esc(v))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(e.name)+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(e.name)+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
     });
@@ -477,7 +497,7 @@ function renderSetup(tab,comp){
   const f=FORMATS[comp.format];
   let h='<div class="stack" id="setup-root"><div class="panel stack"><div class="row" style="justify-content:space-between"><h2>'+(comp.format==="betterball"?"Pairs":comp.format==="scramble"?"Teams":"Field")+'</h2><span class="note" id="fieldCount"></span></div><div id="elist" class="elist"></div>';
   if(writable()){
-    const team=comp.format==="betterball",scr=comp.format==="scramble";
+    const team=comp.format==="betterball"||hasTeams(comp),scr=comp.format==="scramble";
     h+='<form id="eform" class="stack" style="border-top:1px solid var(--line);padding-top:14px" novalidate><h3 id="eformTitle">Add '+(scr?"a team":"a player")+'</h3><div class="grid">';
     h+='<label class="f">'+(scr?"Team name":"Name")+'<input id="e-name" required autocomplete="off"></label>';
     h+='<label class="f">'+(scr?"Team handicap":"Handicap index")+'<input id="e-index" inputmode="decimal" placeholder="'+(scr?"e.g. 6":"e.g. 12.4 or +1.2")+'"></label>';
@@ -501,7 +521,7 @@ function renderEntryList(comp){
   $("#fieldCount").textContent=entries.length?entries.length+(comp.format==="scramble"?" team":" player")+(entries.length===1?"":"s"):"";
   if(!entries.length){el.innerHTML='<p class="muted" style="margin:0">Nobody entered yet.</p>';return}
   let list=entries.slice();
-  if(comp.format==="betterball")list.sort((a,b)=>(a.team||"~").localeCompare(b.team||"~"));
+  if(comp.format==="betterball"||hasTeams(comp))list.sort((a,b)=>(a.team||"~").localeCompare(b.team||"~"));
   let h="";
   list.forEach(e=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
@@ -568,6 +588,10 @@ function compForm(host,comp){
   h+='<label class="f">Format<select id="f-format">'+Object.entries(FORMATS).map(([k,v])=>'<option value="'+k+'"'+(k===fmt?" selected":"")+'>'+v.label+'</option>').join("")+'</select></label>';
   h+='<label class="f" id="allowWrap">Handicap allowance %<input id="f-allow" inputmode="numeric" value="'+esc(comp?comp.allowance:FORMATS[fmt].allowance)+'"></label>';
   h+='</div><p class="note" id="fmtBlurb" style="margin:0"></p>';
+  const tOn=!!(comp&&comp.teams&&comp.teams.enabled),tAl=comp?teamAllowance(comp):85;
+  h+='<div id="teamWrap" class="banner stack" style="gap:10px"><label class="row" style="gap:10px;font-weight:600;cursor:pointer"><input type="checkbox" id="f-teams" style="width:20px;min-height:20px;margin:0"'+(tOn?" checked":"")+'> Also run a pairs competition (better-ball Stableford)</label>';
+  h+='<p class="note" style="margin:0">Same scores, second leaderboard. Partners share a pair name, and the better Stableford score of the two counts on each hole.</p>';
+  h+='<label class="f" id="tAllowWrap" style="max-width:220px">Pairs handicap allowance %<input id="f-tallow" inputmode="numeric" value="'+esc(tAl)+'"></label></div>';
   h+='<div class="grid"><label class="f">Course and tees<input id="f-course" value="'+esc(c.name)+'" placeholder="e.g. Old Course, yellow tees" autocomplete="off"></label>';
   h+='<label class="f">Course rating<input id="f-rating" inputmode="decimal" value="'+esc(c.rating)+'"></label>';
   h+='<label class="f">Slope rating<input id="f-slope" inputmode="numeric" value="'+esc(c.slope)+'"></label></div>';
@@ -582,10 +606,11 @@ function compForm(host,comp){
   if(comp&&!comp.local&&S.canEdit)h+='<div style="border-top:1px solid var(--line);padding-top:14px" class="row"><button type="button" class="'+(S.confirm==="comp"?"danger":"ghost")+'" id="cDel">'+(S.confirm==="comp"?"Confirm: delete competition and all scores":"Delete competition")+'</button></div>';
   h+='</form>';
   host.innerHTML=h;
-  const upd=()=>{const k=$("#f-format").value;$("#fmtBlurb").textContent=FORMATS[k].blurb;$("#allowWrap").hidden=k==="scramble";let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
+  const upd=()=>{const k=$("#f-format").value;$("#fmtBlurb").textContent=FORMATS[k].blurb;$("#allowWrap").hidden=k==="scramble";$("#teamWrap").hidden=!(k==="stroke"||k==="stableford");$("#tAllowWrap").hidden=!$("#f-teams").checked;let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
   upd();
   $("#f-format").onchange=()=>{$("#f-allow").value=FORMATS[$("#f-format").value].allowance;upd()};
   host.querySelectorAll('[id^="par-"]').forEach(x=>x.oninput=upd);
+  $("#f-teams").onchange=upd;
   const del=$("#cDel");
   if(del)del.onclick=async()=>{
     if(S.confirm!=="comp"){S.confirm="comp";compForm(host,comp);setTimeout(()=>{if(S.confirm==="comp"){S.confirm=null;if(document.body.contains(host))compForm(host,comp)}},5000);return}
@@ -606,7 +631,10 @@ function compForm(host,comp){
     const rating=parseFloat(String($("#f-rating").value).replace(",",".")),slope=parseInt($("#f-slope").value);
     if(!(rating>50&&rating<90))return err("Course rating looks wrong. It's usually close to par, e.g. 71.4.");
     if(!(slope>=55&&slope<=155))return err("Slope rating must be 55 to 155. Use 113 if you don't know it.");
-    const data={name,date:$("#f-date").value,format,allowance,course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
+    const teamsOn=(format==="stroke"||format==="stableford")&&$("#f-teams").checked;
+    const tallow=parseFloat($("#f-tallow").value);
+    if(teamsOn&&!(tallow>0&&tallow<=100))return err("Pairs allowance must be between 1 and 100%.");
+    const data={name,date:$("#f-date").value,format,allowance,teams:{enabled:teamsOn,allowance:teamsOn?tallow:85},course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
     if(comp&&comp.local){Object.assign(SAMPLE,data);toast("Sample updated on this screen.");render();return}
     $("#cSubmit").disabled=true;
     try{
@@ -622,6 +650,7 @@ document.addEventListener("click",ev=>{
   const comp=curComp();
   if(t.dataset.go){go(t.dataset.go);return}
   if(t.dataset.mode){S.boardMode=t.dataset.mode;render();return}
+  if(t.dataset.kind){S.boardKind=t.dataset.kind;S.openCard=null;LS.set("kind",S.boardKind);render();return}
   if(t.dataset.card){S.openCard=S.openCard===t.dataset.card?null:t.dataset.card;render();return}
   if(t.dataset.grp&&comp){
     const entries=curEntries();let g=(LS.get(groupKey(comp))||(comp.local?["s3","s5"]:[])).filter(id=>entries.some(e=>e.id===id));
