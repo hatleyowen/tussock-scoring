@@ -1,4 +1,4 @@
-# Clubhouse Scoring
+# Tussock Scoring
 
 A shared golf competition scoring app. Set up the course card and the field, let each group enter scores hole by hole from their phones, and follow a live leaderboard.
 
@@ -24,7 +24,7 @@ A stroke play or Stableford competition can also run a **pairs competition (bett
 
 ## How it's built
 
-A single file, `clubhouse-scoring.html`: plain HTML, CSS and JavaScript, with no build step.
+A single file, `tussock-scoring.html`: plain HTML, CSS and JavaScript, with no build step.
 
 Shared data uses the claude.ai Artifact runtime (`claude.use("db")` and `claude.use("user")`):
 
