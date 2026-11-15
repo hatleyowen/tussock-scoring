@@ -120,6 +120,12 @@ table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13
 .stepper{display:flex;align-items:center;gap:6px}
 .stepper button{width:48px;height:48px;font-size:24px;padding:0}
 .stepper .val{width:56px;text-align:center;font-family:var(--f-display);font-weight:700;font-size:36px;line-height:1}
+.stepper .val{display:flex;align-items:center;justify-content:center;height:56px}
+.stepper .val .mk{width:42px;height:42px;font:inherit}
+.stepper .val .mk.eagle{box-shadow:0 0 0 2px var(--under),0 0 0 4px var(--surface),0 0 0 6px var(--under)}
+.stepper .val .mk.birdie{box-shadow:0 0 0 2px var(--under)}
+.stepper .val .mk.bogey{box-shadow:0 0 0 2px var(--fg)}
+.stepper .val .mk.dbl{box-shadow:0 0 0 2px var(--fg),0 0 0 4px var(--surface),0 0 0 6px var(--fg)}
 .stepper .pk{width:auto;font-size:14px;padding:0 10px}
 .res{font-size:12px;color:var(--muted)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px);z-index:20}
@@ -494,7 +500,7 @@ function renderScore(tab,comp){
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
       h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
       const dis=writable()?"":" disabled";
-      h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(e.name)+'"'+dis+'>−</button><span class="val" aria-live="polite">'+(v==null?'<span class="muted">–</span>':esc(v))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(e.name)+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(e.name)+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
+      h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(e.name)+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(e.name)+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(e.name)+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
     });
     h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div>';
   }
