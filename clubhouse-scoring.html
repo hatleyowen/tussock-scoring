@@ -63,12 +63,13 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:60
 /* Comp header + tabs */
 .comp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;padding-block:8px 14px}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
-.tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;color:var(--muted);font-family:var(--f-display);font-size:18px;letter-spacing:.04em;text-transform:uppercase;padding:8px 14px}
+.tabs button{white-space:nowrap;flex:none;border:none;border-bottom:3px solid transparent;border-radius:0;background:none;color:var(--muted);font-family:var(--f-display);font-size:18px;letter-spacing:.04em;text-transform:uppercase;padding:8px 14px}
 .tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 
 /* Leaderboard */
 .board-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:520px}
+table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.board .m-line{display:none}
 .board th{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--sunk)}
 .board th:nth-child(2),.board td:nth-child(2){text-align:left}
 .board td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
@@ -88,11 +89,13 @@ table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
 .seg.kind button{flex:1 1 0;min-height:44px;font-family:var(--f-display);font-size:17px;letter-spacing:.03em;text-transform:uppercase;padding:6px 12px;line-height:1.1}
 
 /* Scorecard grid */
-.sc-wrap{overflow-x:auto;padding:0 12px}
-table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px;min-width:720px;width:100%}
-.sc th,.sc td{border:1px solid var(--line);text-align:center;padding:4px 2px;min-width:30px}
+.sc-pair{display:flex;flex-wrap:wrap;gap:10px;padding:0 12px}
+.sc-wrap{flex:1 1 360px;min-width:0;overflow-x:auto}
+table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px;width:100%;table-layout:fixed}
+.sc th,.sc td{border:1px solid var(--line);text-align:center;padding:4px 1px;overflow:hidden}
 .sc th{font-weight:600;color:var(--muted);background:var(--sunk);font-size:11px}
-.sc td.lbl,.sc th.lbl{text-align:left;padding-inline:8px;min-width:64px;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.sc th.tc{width:34px}
+.sc td.lbl,.sc th.lbl{text-align:left;padding-inline:6px;width:58px;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;text-overflow:ellipsis}
 .sc td.tot{font-weight:700;background:var(--sunk)}
 .mk{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;font-weight:600}
 .mk.eagle{border-radius:50%;box-shadow:0 0 0 1.5px var(--under),0 0 0 3.5px var(--surface),0 0 0 5px var(--under);color:var(--under)}
@@ -135,6 +138,24 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
 .erow .who{min-width:0;flex:1 1 180px}
 .err{color:var(--under);font-size:13px}
 @media (max-width:560px){
+  .tabs{gap:0}
+  .tabs button{font-size:16px;padding:8px 10px;letter-spacing:.02em}
+  .comp-head .btn.ghost{display:none}
+  .board .c-wide{display:none}
+  .board .m-line{display:block}
+  .board th,.board td{padding:8px 6px}
+  .board th:first-child,.board td:first-child{padding-left:10px}
+  .board th:last-child,.board td:last-child{padding-right:10px}
+  .board .pos{width:44px;font-size:19px}
+  .board .big{font-size:23px}
+  .board .nm{overflow-wrap:anywhere}
+  .seg.kind .lg{display:none}
+  .sc-pair{padding:0 6px;gap:8px}
+  .sc-wrap{flex-basis:100%}
+  table.sc{font-size:12px}
+  .sc td.lbl,.sc th.lbl{width:44px;padding-inline:4px;font-size:10px;letter-spacing:.02em}
+  .sc th.tc{width:32px;font-size:10px}
+  .mk{width:21px;height:21px}
   .holes button{min-height:34px;font-size:16px}
   .stepper button{width:44px;height:44px}
   .hole-head .h{font-size:36px}
@@ -403,7 +424,7 @@ function renderBoard(tab,comp){
   const {rows,points}=buildBoard(comp,entries,mode,kind);
   let h='';
   if(teams){
-    h+='<div class="seg kind" role="group" aria-label="Competition" style="margin-bottom:14px"><button aria-pressed="'+(kind==="ind")+'" data-kind="ind">Individual · '+esc(f.label)+'</button><button aria-pressed="'+(kind==="team")+'" data-kind="team">Pairs · Better-ball Stableford</button></div>';
+    h+='<div class="seg kind" role="group" aria-label="Competition" style="margin-bottom:14px"><button aria-pressed="'+(kind==="ind")+'" data-kind="ind">Individual<span class="lg">&nbsp;· '+esc(f.label)+'</span></button><button aria-pressed="'+(kind==="team")+'" data-kind="team">Pairs<span class="lg">&nbsp;· Better-ball Stableford</span></button></div>';
   }
   if(kind==="team"&&!rows.length){
     tab.innerHTML=h+'<div class="panel empty stack"><h2>No pairs yet</h2><p class="muted" style="max-width:60ch">Give both partners the same pair name under Field &amp; course. Their individual scores feed this leaderboard automatically, off '+teamAllowance(comp)+'% of handicap.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Set up pairs</button></div></div>';
@@ -416,18 +437,21 @@ function renderBoard(tab,comp){
   if(kind==="team"){const unp=entries.filter(e=>!(e.team||"").trim()).length;h+=' · '+teamAllowance(comp)+'% allowance'+(unp?' · '+unp+' player'+(unp===1?'':'s')+' not in a pair':'')}
   h+='</span></div>';
   if(!points)h+='<div class="seg" role="group" aria-label="Leaderboard type"><button aria-pressed="'+(S.boardMode==="net")+'" data-mode="net">Net</button><button aria-pressed="'+(S.boardMode==="gross")+'" data-mode="gross">Gross</button></div>';
-  h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(isPairs?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th>'+(comp.format==="scramble"?"Team hcp":"Playing hcp")+'</th>';
-  h+=points?'<th>Points</th>':'<th>Gross</th><th>'+(mode==="net"?"Net":"")+'</th><th>To par</th>';
+  h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(isPairs?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th class="c-wide">'+(comp.format==="scramble"?"Team hcp":"Playing hcp")+'</th>';
+  h+=points?'<th>Pts</th>':'<th class="c-wide">Gross</th><th class="c-wide">'+(mode==="net"?"Net":"")+'</th><th>To par</th>';
   h+='</tr></thead><tbody>';
   const cols=points?5:7;
   rows.forEach(r=>{
     const thru=!r.started?"–":r.complete?"F":r.thru;
+    const grossTxt=r.complete&&!r.nr?String(r.gross):r.started?(r.nr?"NR":String(r.gross)):"";
+    const netTxt=!points&&mode==="net"&&r.complete&&!r.nr?String(r.gross-r.ph):"";
+    const mline=['Hcp '+r.phLabel].concat(points?[]:[grossTxt?grossTxt+' gross':'',netTxt?netTxt+' net':'']).filter(Boolean).join(' · ');
     h+='<tr class="ent" data-card="'+esc(r.key)+'" aria-expanded="'+(S.openCard===r.key)+'"><td class="pos">'+esc(r.pos)+(r.cb?'<span class="cb" title="Decided on countback">C/B</span>':'')+'</td>';
-    h+='<td><div class="nm">'+esc(r.name)+'</div>'+(r.sub?'<div class="sub">'+esc(r.sub)+'</div>':'')+'</td><td>'+thru+'</td><td>'+esc(r.phLabel)+'</td>';
+    h+='<td><div class="nm">'+esc(r.name)+'</div>'+(r.sub?'<div class="sub">'+esc(r.sub)+'</div>':'')+'<div class="sub m-line">'+esc(mline)+'</div></td><td>'+thru+'</td><td class="c-wide">'+esc(r.phLabel)+'</td>';
     if(points)h+='<td><span class="big">'+(r.started?r.pts:"–")+'</span></td>';
     else{
-      h+='<td>'+(r.complete&&!r.nr?r.gross:r.started?'<span class="muted">'+(r.nr?"NR":r.gross)+'</span>':"–")+'</td>';
-      h+='<td>'+(mode==="net"&&r.complete&&!r.nr?r.gross-r.ph:"")+'</td>';
+      h+='<td class="c-wide">'+(r.complete&&!r.nr?r.gross:r.started?'<span class="muted">'+(r.nr?"NR":r.gross)+'</span>':"–")+'</td>';
+      h+='<td class="c-wide">'+netTxt+'</td>';
       h+='<td><span class="big">'+(!r.started?"–":r.nr?'<span class="muted">NR</span>':toPar(r.main))+'</span></td>';
     }
     h+='</tr>';
@@ -441,20 +465,22 @@ function cardHtml(comp,r,points){
   const c=comp.course;
   const lines=r.team?r.members:[r];
   const range=(a,b)=>{const o=[];for(let i=a;i<b;i++)o.push(i);return o};
-  const half=(idx,lbl)=>idx.map(i=>'<'+lbl+'>'+(i+1)+'</'+lbl+'>').join("");
-  let h='<div class="sc-wrap"><table class="sc"><thead><tr><th class="lbl">Hole</th>'+half(range(0,9),"th")+'<th>Out</th>'+half(range(9,18),"th")+'<th>In</th><th>Tot</th></tr></thead><tbody>';
-  const rowOf=(lbl,fn,tot)=>{let s='<tr><td class="lbl">'+lbl+'</td>';range(0,9).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(0,9)+'</td>';range(9,18).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(9,18)+'</td><td class="tot">'+tot(0,18)+'</td></tr>';return s};
   const sp=(a,b)=>sum(c.pars.slice(a,b));
-  h+=rowOf("Par",i=>c.pars[i],sp);
-  h+=rowOf("S.I.",i=>c.si[i],()=>"");
-  lines.forEach(L=>{
-    const hasP=L.holes.some(x=>x.g==="P");
-    h+=rowOf(r.team?esc(String(L.name).slice(0,12)):"Score",i=>mark(L.holes[i].g,c.pars[i])+(L.holes[i].rec>0?'<div class="dots">'+"•".repeat(L.holes[i].rec)+'</div>':""),(a,b)=>{if(hasP&&b-a===18)return"NR";let t=0,any=false;for(let i=a;i<b;i++){if(typeof L.holes[i].g==="number"){t+=L.holes[i].g;any=true}}return any?t:""});
-    if(points)h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=L.holes[i].pts||0;return t});
-  });
-  if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
-  h+='</tbody></table></div>';
-  return h;
+  // One table per nine, so each fits a phone screen; side by side when there's room.
+  const nine=(a,b,back)=>{
+    let h='<div class="sc-wrap"><table class="sc"><thead><tr><th class="lbl">'+(back?"In":"Out")+'</th>'+range(a,b).map(i=>'<th>'+(i+1)+'</th>').join("")+'<th class="tc">'+(back?"In":"Out")+'</th>'+(back?'<th class="tc">Tot</th>':'')+'</tr></thead><tbody>';
+    const rowOf=(lbl,fn,tot)=>{let s='<tr><td class="lbl">'+lbl+'</td>';range(a,b).forEach(i=>s+='<td>'+fn(i)+'</td>');s+='<td class="tot">'+tot(a,b)+'</td>';if(back)s+='<td class="tot">'+tot(0,18)+'</td>';return s+'</tr>'};
+    h+=rowOf("Par",i=>c.pars[i],sp);
+    h+=rowOf("S.I.",i=>c.si[i],()=>"");
+    lines.forEach(L=>{
+      const hasP=L.holes.some(x=>x.g==="P");
+      h+=rowOf(r.team?esc(String(L.name).slice(0,10)):"Score",i=>mark(L.holes[i].g,c.pars[i])+(L.holes[i].rec>0?'<div class="dots">'+"•".repeat(L.holes[i].rec)+'</div>':""),(x,y)=>{if(hasP&&y-x===18)return"NR";let t=0,any=false;for(let i=x;i<y;i++){if(typeof L.holes[i].g==="number"){t+=L.holes[i].g;any=true}}return any?t:""});
+      if(points)h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(x,y)=>{let t=0;for(let i=x;i<y;i++)t+=L.holes[i].pts||0;return t});
+    });
+    if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(x,y)=>{let t=0;for(let i=x;i<y;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
+    return h+'</tbody></table></div>';
+  };
+  return '<div class="sc-pair">'+nine(0,9,false)+nine(9,18,true)+'</div>';
 }
 
 function groupKey(comp){return "grp:"+comp.id}
