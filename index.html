@@ -252,14 +252,14 @@ function evalEntry(e,comp){
     else if(typeof v==="number"){h.net=v-rec;h.pts=Math.max(0,2+par-h.net);gross+=v;pts+=h.pts;netTP+=h.net-par;grossTP+=v-par;thru++}
     holes.push(h);
   }
-  return {key:e.id,name:e.name,sub:e.members||"",e,ph,phLabel:String(ph),holes,thru,gross,pts,netTP,grossTP,pickup,complete:thru===18};
+  return {key:e.id,name:dispName(e,comp),sub:dispMembers(e.members,comp),e,ph,phLabel:String(ph),holes,thru,gross,pts,netTP,grossTP,pickup,complete:thru===18};
 }
 function hasTeams(comp){return !!(comp.teams&&comp.teams.enabled)&&(comp.format==="stroke"||comp.format==="stableford")}
 function teamAllowance(comp){const a=Number(comp.teams&&comp.teams.allowance);return a>0?a:85}
 function teamRows(comp,entries,sideGame){
   const groups=new Map();
   const tc=sideGame?Object.assign({},comp,{allowance:teamAllowance(comp)}):comp;
-  entries.forEach(e=>{const t=(e.team||"").trim();if(!t&&sideGame)return;const k=t||("Unpaired: "+e.name);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(evalEntry(e,tc))});
+  entries.forEach(e=>{const t=(e.team||"").trim();if(!t&&sideGame)return;const k=t||("Unpaired: "+dispName(e,comp));if(!groups.has(k))groups.set(k,[]);groups.get(k).push(evalEntry(e,tc))});
   return [...groups].map(([name,evs])=>{
     const holes=[];let thru=0,pts=0;
     for(let i=0;i<18;i++){
@@ -368,6 +368,12 @@ async function flush(cid,pid){
    competition's code can only enter scores in it. The sample round is editable on-screen by anyone. */
 function canAdmin(){return S.compId==="sample"||(!!S.db&&S.isAdmin)}
 function canScore(comp){if(!comp)return false;if(comp.local)return true;return !!S.db&&(S.isAdmin||!!S.joined[comp.id])}
+/* Until a phone has unlocked scoring for a competition (or is an organiser), players are shown as
+   "First L." and NZ Golf numbers are hidden. Team names in a scramble are left as they are. */
+function canSeeDetails(comp){return !!comp&&(comp.local||canScore(comp))}
+function shortName(n){const p=String(n||"").trim().split(/\s+/).filter(Boolean);return p.length<2?(p[0]||""):p[0]+" "+p[p.length-1].charAt(0).toUpperCase()+"."}
+function dispName(e,comp){return comp&&comp.format!=="scramble"&&!canSeeDetails(comp)?shortName(e.name):e.name}
+function dispMembers(s,comp){return !s||canSeeDetails(comp)?(s||""):String(s).split(",").map(shortName).filter(Boolean).join(", ")}
 function codeOf(c){return c.local?c.code:(S.secrets[c.id]||"")}
 let secretsUnsub=null;
 function subscribeSecrets(){
@@ -375,14 +381,20 @@ function subscribeSecrets(){
   secretsUnsub=S.db.collection("secrets").onSnapshot(snap=>{const m={};snap.docs.forEach(d=>m[d.id]=d.data().code||"");S.secrets=m;render(true)},()=>{});
 }
 async function checkJoined(id){
-  if(!S.db||!S.authUser||!id||id==="sample"||S.joined[id])return;
-  try{const d=await S.db.doc("comps/"+id+"/members/"+S.authUser.uid).get();if(d.exists()){S.joined[id]=true;render(true)}}catch(e){}
+  /* Skipped while a join is in flight: the offline cache shows the new member record before the
+     server has accepted or rejected the code. */
+  if(!S.db||!S.authUser||!id||id==="sample"||S.joined[id]||S.joining===id)return;
+  try{const d=await S.db.doc("comps/"+id+"/members/"+S.authUser.uid).get();if(d.exists()&&S.joining!==id){S.joined[id]=true;render(true)}}catch(e){}
 }
 async function joinComp(comp,code){
-  if(!S.authUser)await S.fb.signInAnon();
-  const uid=S.fb.auth.currentUser.uid;
-  await S.db.doc("comps/"+comp.id+"/members/"+uid).set({code,joinedAt:S.db.now()});
-  S.joined[comp.id]=true;
+  S.joining=comp.id;
+  try{
+    if(!S.authUser)await S.fb.signInAnon();
+    const uid=S.fb.auth.currentUser.uid;
+    await S.db.doc("comps/"+comp.id+"/members/"+uid).set({code,joinedAt:S.db.now()});
+    S.joined[comp.id]=true;
+  }catch(e){delete S.joined[comp.id];throw e}
+  finally{S.joining=null}
 }
 
 /* ---------- toast ---------- */
@@ -536,12 +548,12 @@ function renderScore(tab,comp){
   const f=FORMATS[comp.format],points=f.scoring==="points";
   const c=comp.course,hole=S.hole,i=hole-1;
   let h='<div class="stack"><div class="panel stack"><div><div class="eyebrow">Your card</div><p class="note" style="margin:2px 0 0">Pick who you\'re marking for, up to four.</p></div><div class="chips">';
-  entries.forEach(e=>{h+='<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(e.name)+'</button>'});
+  entries.forEach(e=>{h+='<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(dispName(e,comp))+'</button>'});
   h+='</div></div>';
   if(!canScore(comp)){
     h+='<div class="panel stack"><div><div class="eyebrow">Unlock scoring</div><h3>Enter the competition code</h3><p class="note" style="margin:2px 0 0">Ask the organiser for the code. You only need to enter it once on this phone.</p></div>';
     if(!S.db)h+='<p class="note" style="margin:0">Scoring needs a connection. Check your signal and reload.</p>';
-    else h+='<form id="jform" class="join" novalidate><label class="f">Competition code<input id="j-code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false"></label><button class="primary" type="submit" id="jSubmit">Unlock</button></form><span class="err" id="jErr" role="alert"></span>';
+    else h+='<form id="jform" class="join" novalidate><label class="f">Competition code<input id="j-code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" value="'+esc(S.joinCode||"")+'"></label><button class="primary" type="submit" id="jSubmit"'+(S.joinBusy?" disabled":"")+'>'+(S.joinBusy?"Checking…":"Unlock")+'</button></form><span class="err" id="jErr" role="alert">'+esc(S.joinErr&&S.joinErr[comp.id]||"")+'</span>';
     h+='</div>';
   }
   const sel=grp.map(id=>entries.find(e=>e.id===id)).filter(Boolean);
@@ -551,9 +563,9 @@ function renderScore(tab,comp){
     h+='</div><div class="hole-head"><button aria-label="Previous hole" data-hole="'+(hole>1?hole-1:18)+'">‹</button><div style="text-align:center"><div class="eyebrow">Hole</div><div class="h">'+hole+'</div></div><div class="meta"><span>Par <b>'+c.pars[i]+'</b></span><span>S.I. <b>'+c.si[i]+'</b></span></div><button aria-label="Next hole" data-hole="'+(hole<18?hole+1:1)+'">›</button></div>';
     sel.forEach(e=>{
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
-      h+='<div class="prow"><div class="who"><div class="n">'+esc(e.name)+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
+      h+='<div class="prow"><div class="who"><div class="n">'+esc(dispName(e,comp))+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
       const dis=canScore(comp)?"":" disabled";
-      h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(e.name)+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(e.name)+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(e.name)+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
+      h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(dispName(e,comp))+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(dispName(e,comp))+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(dispName(e,comp))+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
     });
     h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div>';
   }
@@ -562,14 +574,16 @@ function renderScore(tab,comp){
   const jf=$("#jform");
   if(jf)jf.onsubmit=async ev=>{
     ev.preventDefault();
-    const code=$("#j-code").value.trim().toUpperCase(),errEl=$("#jErr");
-    if(!code){errEl.textContent="Type the code first.";return}
-    $("#jSubmit").disabled=true;errEl.textContent="";
-    try{await joinComp(comp,code);toast("Scoring unlocked for "+comp.name+".");render()}
+    /* State lives in S, not the DOM: signing in redraws the page part-way through. */
+    const code=$("#j-code").value.trim().toUpperCase();
+    S.joinErr=S.joinErr||{};S.joinCode=code;
+    if(!code){S.joinErr[comp.id]="Type the code first.";render();return}
+    S.joinErr[comp.id]="";S.joinBusy=true;render();
+    try{await joinComp(comp,code);S.joinCode="";toast("Scoring unlocked for "+comp.name+".")}
     catch(err){
-      errEl.textContent=err&&err.code==="permission-denied"?"That code doesn't match this competition. Check it with the organiser.":"Couldn't check the code ("+(err&&err.code||"error")+"). Check your connection and try again.";
-      $("#jSubmit").disabled=false;
+      S.joinErr[comp.id]=err&&err.code==="permission-denied"?"That code doesn't match this competition. Check it with the organiser.":"Couldn't check the code ("+(err&&err.code||"error")+"). Check your connection and try again.";
     }
+    finally{S.joinBusy=false;render()}
   };
 }
 function stripTP(n){return n===0?"E":n>0?"+"+n:String(n)}
@@ -608,7 +622,7 @@ function renderEntryList(comp){
   let h="";
   list.forEach(e=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
-    h+='<div class="erow"><div class="who"><b>'+esc(e.name)+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(e.members)+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
+    h+='<div class="erow"><div class="who"><b>'+esc(dispName(e,comp))+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo&&canSeeDetails(comp)?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(dispMembers(e.members,comp))+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
     if(canAdmin()){
       const conf=S.confirm==="e:"+e.id;
       h+='<div class="row"><button data-edit="'+esc(e.id)+'">Edit</button><button class="'+(conf?"danger":"ghost")+'" data-del="'+esc(e.id)+'">'+(conf?"Confirm remove":"Remove")+'</button></div>';
