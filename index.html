@@ -622,6 +622,7 @@ function renderSetup(tab,comp){
     if(team)h+='<label class="f">Pair name<input id="e-team" placeholder="Same name for both partners" autocomplete="off"></label>';
     if(scr)h+='<label class="f">Players<input id="e-members" placeholder="Names, comma separated" autocomplete="off"></label>';
     h+='</div><div class="row"><button class="primary" type="submit" id="eSubmit">Add</button><button type="button" class="ghost" id="eCancel" hidden>Cancel</button><span class="err" id="eErr"></span></div>';
+    if(team)h+='<div class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px"><h3>Pairs</h3><p class="note" style="margin:0">Random pairs split the field in half by handicap index. Each player in the lower half is drawn a random partner from the higher half, and both get the same pair name. With an odd number of players, one is left without a partner.</p><div class="row"><button type="button" id="pGen">Generate random pairs</button><button type="button" class="danger" id="pClear">Clear all pairs</button></div><span class="note" id="pMsg" role="status"></span></div>';
     h+='<p class="note" style="margin:0">'+(scr?"Enter the team's playing handicap directly.":"Playing handicap = handicap index × slope ÷ 113 + (course rating − par), rounded, then × "+esc(comp.allowance)+"% allowance. Write a plus handicap as +1.2.")+'</p></form>';
   }
   h+='</div>';
@@ -662,7 +663,7 @@ function renderEntryList(comp){
   if(!entries.length){el.innerHTML='<p class="muted" style="margin:0">Nobody entered yet.</p>';return}
   let list=entries.slice();
   /* Lowest handicap index first (plus handicaps are stored as negatives, so they come first); ties by name. */
-  list.sort((a,b)=>((Number(a.index)||0)-(Number(b.index)||0))||String(a.name||"").localeCompare(String(b.name||"")));
+  list.sort(byHandicap);
   let h="";
   list.forEach((e,n)=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
@@ -677,7 +678,43 @@ function renderEntryList(comp){
 }
 function fmtIdx(v){const n=Number(v)||0;return n<0?"+"+(-n):String(n)}
 function parseIdx(s){s=String(s||"").trim();if(!s)return 0;let neg=false;if(s[0]==="+"){neg=true;s=s.slice(1)}const n=parseFloat(s.replace(",","."));if(isNaN(n))return NaN;return neg?-n:n}
+function byHandicap(a,b){return ((Number(a.index)||0)-(Number(b.index)||0))||String(a.name||"").localeCompare(String(b.name||""))}
+function randInt(n){const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n}
+/* Set the pair name on several entries at once ([[entry, team], ...]). */
+async function setTeams(comp,changes){
+  if(comp.local){changes.forEach(([e,t])=>{e.team=t});return}
+  await Promise.all(changes.map(([e,t])=>S.db.doc("comps/"+comp.id+"/players/"+e.id).update({team:t})));
+}
+function bindPairTools(comp){
+  const gen=$("#pGen"),clr=$("#pClear"),msg=$("#pMsg");if(!gen)return;
+  const done=()=>renderEntryList(comp);/* live competitions also refresh from the database */
+  gen.onclick=async()=>{
+    const field=curEntries().slice();
+    if(field.some(e=>(e.team||"").trim())){msg.textContent="Some players already have a pair name. Clear all pairs first, then generate.";return}
+    if(field.length<2){msg.textContent="Add at least two players first.";return}
+    field.sort(byHandicap);
+    const half=Math.floor(field.length/2),top=field.slice(0,half),bottom=field.slice(half),changes=[];
+    top.forEach((p,i)=>{const q=bottom.splice(randInt(bottom.length),1)[0];const t="Pair "+(i+1);changes.push([p,t],[q,t])});
+    gen.disabled=clr.disabled=true;msg.textContent="Drawing pairs…";
+    try{
+      await setTeams(comp,changes);
+      msg.textContent="Drew "+top.length+" pair"+(top.length===1?"":"s")+"."+(bottom.length?" "+bottom[0].name+" has no partner (odd number of players).":"");
+      done();
+    }catch(err){msg.textContent="";writeErr(err)}
+    finally{gen.disabled=clr.disabled=false}
+  };
+  clr.onclick=async()=>{
+    const paired=curEntries().filter(e=>(e.team||"").trim());
+    if(!paired.length){msg.textContent="No one has a pair name yet.";return}
+    if(!confirm("Are you sure? This will remove all Team pairing for the competition."))return;
+    gen.disabled=clr.disabled=true;msg.textContent="Clearing pairs…";
+    try{await setTeams(comp,paired.map(e=>[e,""]));msg.textContent="Cleared all pairs.";done()}
+    catch(err){msg.textContent="";writeErr(err)}
+    finally{gen.disabled=clr.disabled=false}
+  };
+}
 function bindEntryForm(comp){
+  bindPairTools(comp);
   const form=$("#eform");
   const reset=()=>{S.editEntry=null;form.reset();$("#eformTitle").textContent=comp.format==="scramble"?"Add a team":"Add a player";$("#eSubmit").textContent="Add";$("#eCancel").hidden=true;$("#eErr").textContent=""};
   $("#eCancel").onclick=reset;
