@@ -88,6 +88,7 @@ table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
 .board tr.ent:hover td{background:var(--sunk)}
 .board .pos{font-family:var(--f-display);font-weight:700;font-size:22px;width:56px;text-align:left}
 .board .nm{font-weight:600}
+.board .netv{font-weight:700;color:var(--fg)}
 .board .sub{font-size:12px;color:var(--muted);font-weight:400}
 .board .big{font-family:var(--f-display);font-weight:700;font-size:26px;line-height:1}
 .u{color:var(--under)} .o{color:var(--over)}
@@ -543,13 +544,14 @@ function renderBoard(tab,comp){
     const grossTxt=r.started&&!r.nr?String(r.gross):"";
     const netTxt=!points&&mode==="net"&&r.complete&&!r.nr?String(r.gross-r.ph):"";
     const ptsTxt=showPts&&r.started?String(r.pts):"";
-    const mline=['Hcp '+r.phLabel].concat(points?[]:[grossTxt?grossTxt+' gross':'',netTxt?netTxt+' net':'',ptsTxt?ptsTxt+' pts':'']).filter(Boolean).join(' · ');
+    /* Phone sub-line (HTML; each piece escaped). Net is bold, matching the Net column. */
+    const mline=[esc('Hcp '+r.phLabel)].concat(points?[]:[grossTxt?esc(grossTxt+' gross'):'',netTxt?'<b class="netv">'+esc(netTxt+' net')+'</b>':'',ptsTxt?esc(ptsTxt+' pts'):'']).filter(Boolean).join(' · ');
     h+='<tr class="ent" data-card="'+esc(r.key)+'" aria-expanded="'+(S.openCard===r.key)+'"><td class="pos">'+esc(r.pos)+(r.cb?'<span class="cb" title="Decided on countback">C/B</span>':'')+'</td>';
-    h+='<td><div class="nm">'+esc(r.name)+'</div>'+(r.sub?'<div class="sub">'+esc(r.sub)+'</div>':'')+'<div class="sub m-line">'+esc(mline)+'</div></td><td>'+thru+'</td><td class="c-wide">'+esc(r.phLabel)+'</td>';
+    h+='<td><div class="nm">'+esc(r.name)+'</div>'+(r.sub?'<div class="sub">'+esc(r.sub)+'</div>':'')+'<div class="sub m-line">'+mline+'</div></td><td>'+thru+'</td><td class="c-wide">'+esc(r.phLabel)+'</td>';
     if(points)h+='<td><span class="big">'+(r.started?r.pts:"–")+'</span></td>';
     else{
       h+='<td class="c-wide">'+(r.complete&&!r.nr?r.gross:r.started?'<span class="muted">'+(r.nr?"NR":r.gross)+'</span>':"–")+'</td>';
-      h+='<td class="c-wide">'+netTxt+'</td>';
+      h+='<td class="c-wide">'+(netTxt?'<b class="netv">'+netTxt+'</b>':'')+'</td>';
       if(showPts)h+='<td class="c-wide">'+(r.started?(r.complete?ptsTxt:'<span class="muted">'+ptsTxt+'</span>'):"–")+'</td>';
       h+='<td><span class="big">'+(!r.started?"–":r.nr?'<span class="muted">NR</span>':toPar(r.main))+'</span></td>';
     }
