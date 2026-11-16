@@ -27,6 +27,8 @@
   --bg:#0F1512; --surface:#18211C; --sunk:#202B25; --fg:#E5ECE6; --muted:#97A69C; --line:#2E3B33;
   --accent:#6CC294; --accent-fg:#0F1512; --accent-soft:#1E3529; --under:#FF7066; --over:#E5ECE6; --warn:#E3B04B; color-scheme:dark}
 
+/* The hidden attribute must win over display rules like .stack{display:flex} and button{display:inline-flex}. */
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
 *{box-sizing:border-box}
 .wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
