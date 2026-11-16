@@ -178,6 +178,8 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
   .board .nm{overflow-wrap:anywhere}
   .seg.kind .lg{display:none}
   .holes button{min-height:34px;font-size:16px}
+  /* Four tabs and the six-column stats table both fit a phone without sideways scrolling. */
+  .tabs button{font-size:15px;padding:8px 7px;letter-spacing:0}
   .stepper button{width:44px;height:44px}
   .hole-head .h{font-size:36px}
 }
@@ -188,6 +190,38 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
 .join{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 .join label.f{flex:1 1 180px}
 #j-code{font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.08em}
+/* Stats: score-type dots */
+.stats-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table.stats{width:100%;border-collapse:collapse}
+.stats th{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);background:var(--sunk);white-space:nowrap}
+.stats td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.stats tbody tr:last-child td{border-bottom:none}
+.stats td.nm{font-weight:600;min-width:7.5em}
+.sdots{display:flex;flex-wrap:wrap;gap:3px;max-width:84px;min-height:9px}
+.sd{display:block;width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.sd.eagle{background:var(--under);box-shadow:0 0 0 1.5px var(--surface),0 0 0 3px var(--under);margin:2px}
+.sd.birdie{background:var(--under)}
+.sd.par{background:var(--accent)}
+.sd.bogey{background:transparent;box-shadow:inset 0 0 0 1.5px var(--fg);border-radius:1px}
+.sd.dbl{background:var(--fg);border-radius:1px}
+.sd.worse{background:var(--fg);border-radius:1px;transform:rotate(45deg) scale(.85)}
+.stats .sml{display:none}
+/* Phones: the six score columns share the width evenly, with short headings. (After the rules above so it wins.) */
+@media (max-width:560px){
+  .stats .c-holes{display:none}
+  table.stats{table-layout:fixed}
+  .stats th:first-child{width:24%}
+  .stats th,.stats td{padding:8px 2px}
+  .stats th:first-child,.stats td:first-child{padding-left:8px}
+  .stats th{letter-spacing:0;font-size:9px;white-space:normal}
+  .stats .lgl{display:none}
+  .stats .sml{display:inline}
+  .stats td.nm{min-width:0;font-size:13px;overflow-wrap:anywhere}
+  .sdots{max-width:none;gap:2px}
+  .sd{width:7px;height:7px}
+  .sd.eagle{margin:1.5px}
+}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .uid{font-family:var(--f-mono);font-size:12px;user-select:all;overflow-wrap:anywhere}
 .cinfo{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:0}
 .cinfo dt{font-size:13px;font-weight:600;color:var(--muted)}
@@ -444,7 +478,7 @@ function route(){
   let m;
   S.confirm=null;
   if(h==="new"){S.view="new";S.compId=null}
-  else if((m=/^c-([A-Za-z0-9_-]+?)(?:-(board|score|setup))?$/.exec(h))){
+  else if((m=/^c-([A-Za-z0-9_-]+?)(?:-(board|score|setup|stats))?$/.exec(h))){
     if(S.compId!==m[1]){S.openCard=null;S.editEntry=null;S.hole=(LS.get("hole:"+m[1])||1)}
     S.view="comp";S.compId=m[1];S.tab=m[2]||"board";
   }else{S.view="home";S.compId=null}
@@ -500,13 +534,14 @@ function renderComp(app,comp){
   if(comp.local)h+='<div class="banner sample" style="margin-top:6px">Sample competition. Scores you enter here stay on this screen only.</div>';
   h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+(hasTeams(comp)?' · Pairs better-ball at '+teamAllowance(comp)+'%':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(codeOf(comp)?'<span class="code" title="Competition code">'+esc(codeOf(comp))+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
   h+='<div class="tabs" role="tablist">';
-  [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
+  [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"],["stats","Stats"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
   h+='</div><div id="tab"></div>';
   app.innerHTML=h;
   const tab=$("#tab");
   if(!comp.local&&!S.entriesLoaded[comp.id]){tab.innerHTML='<p class="muted">Loading the field…</p>';return}
   if(S.tab==="board")renderBoard(tab,comp);
   else if(S.tab==="score")renderScore(tab,comp);
+  else if(S.tab==="stats")renderStats(tab,comp);
   else renderSetup(tab,comp);
 }
 
@@ -580,6 +615,37 @@ function cardHtml(comp,r,points){
   if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
   h+='</tbody></table></div>';
   return h;
+}
+
+/* ---------- stats ---------- */
+/* Score types against par (gross). A pickup counts as "worse". */
+/* [key, heading, short heading for phones, full description] */
+const STAT_COLS=[["eagle","Eagle+","Eagle","Eagle or better"],["birdie","Birdie","Birdie","Birdie"],["par","Par","Par","Par"],["bogey","Bogey","Bogey","Bogey"],["dbl","Double","Dbl","Double bogey"],["worse","Worse","Worse","Triple bogey or worse, or a pickup"]];
+function statType(g,par){
+  if(g==="P")return "worse";
+  const d=g-par;
+  return d<=-2?"eagle":d===-1?"birdie":d===0?"par":d===1?"bogey":d===2?"dbl":"worse";
+}
+function renderStats(tab,comp){
+  const entries=curEntries();
+  if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>No one in the field yet</h2><p class="muted">Stats appear here once players are added and scores come in.</p></div>';return}
+  const rows=entries.map(e=>{
+    const n={eagle:0,birdie:0,par:0,bogey:0,dbl:0,worse:0};let played=0;
+    for(let h=1;h<=18;h++){const v=scoreAt(e,h);if(v==null)continue;n[statType(v,comp.course.pars[h-1])]++;played++}
+    return {name:dispName(e,comp),n,played};
+  }).sort((a,b)=>a.name.localeCompare(b.name));
+  const dotsFor=(k,c,full)=>c?'<span class="sdots" title="'+c+' × '+esc(full)+'">'+('<i class="sd '+k+'"></i>').repeat(c)+'</span><span class="sr">'+c+'</span>':'<span class="sr">0</span>';
+  let h='<div class="stack"><div><h2>Score types</h2><p class="note" style="margin:4px 0 0">One dot for each hole, by gross score against par. A pickup counts as Worse.</p></div>';
+  h+='<div class="stats-wrap"><table class="stats"><thead><tr><th>'+(comp.format==="scramble"?"Team":"Player")+'</th>';
+  STAT_COLS.forEach(([k,l,sm,full])=>{h+='<th class="'+k+'" title="'+esc(full)+'"><span class="lgl">'+l+'</span><span class="sml" aria-hidden="true">'+sm+'</span></th>'});
+  h+='<th class="c-holes">Holes</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    h+='<tr><td class="nm">'+esc(r.name)+'</td>';
+    STAT_COLS.forEach(([k,,,full])=>{h+='<td>'+dotsFor(k,r.n[k],full)+'</td>'});
+    h+='<td class="c-holes num muted">'+(r.played||"–")+'</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  tab.innerHTML=h;
 }
 
 function groupKey(comp){return "grp:"+comp.id}
