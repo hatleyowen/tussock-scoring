@@ -661,7 +661,8 @@ function renderEntryList(comp){
   $("#fieldCount").textContent=entries.length?entries.length+(comp.format==="scramble"?" team":" player")+(entries.length===1?"":"s"):"";
   if(!entries.length){el.innerHTML='<p class="muted" style="margin:0">Nobody entered yet.</p>';return}
   let list=entries.slice();
-  if(comp.format==="betterball"||hasTeams(comp))list.sort((a,b)=>(a.team||"~").localeCompare(b.team||"~"));
+  /* Lowest handicap index first (plus handicaps are stored as negatives, so they come first); ties by name. */
+  list.sort((a,b)=>((Number(a.index)||0)-(Number(b.index)||0))||String(a.name||"").localeCompare(String(b.name||"")));
   let h="";
   list.forEach((e,n)=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
