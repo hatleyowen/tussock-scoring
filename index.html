@@ -682,7 +682,7 @@ function renderEntryList(comp){
   let h="";
   list.forEach((e,n)=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
-    h+='<div class="erow"><span class="ecount" aria-label="Entry '+(n+1)+'">'+(n+1)+'</span><div class="who"><b>'+esc(dispName(e,comp))+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo&&canSeeDetails(comp)?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+'</div>':'')+(e.members?'<div class="note">'+esc(dispMembers(e.members,comp))+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
+    h+='<div class="erow"><span class="ecount" aria-label="Entry '+(n+1)+'">'+(n+1)+'</span><div class="who"><b>'+esc(dispName(e,comp))+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo&&canSeeDetails(comp)?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+partnerText(e,entries,comp)+'</div>':'')+(e.members?'<div class="note">'+esc(dispMembers(e.members,comp))+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
     if(canAdmin()){
       const conf=S.confirm==="e:"+e.id;
       h+='<div class="row"><button data-edit="'+esc(e.id)+'">Edit</button><button class="'+(conf?"danger":"ghost")+'" data-del="'+esc(e.id)+'">'+(conf?"Confirm remove":"Remove")+'</button></div>';
@@ -690,6 +690,12 @@ function renderEntryList(comp){
     h+='</div>';
   });
   el.innerHTML=h;
+}
+/* " (Partner L.)" for the field list: whoever else shares this entry's pair name. Display only. */
+function partnerText(e,entries,comp){
+  const t=(e.team||"").trim();if(!t)return "";
+  const mates=entries.filter(o=>o.id!==e.id&&(o.team||"").trim()===t).map(o=>dispName(o,comp));
+  return mates.length?" ("+mates.join(" & ")+")":"";
 }
 function fmtIdx(v){const n=Number(v)||0;return n<0?"+"+(-n):String(n)}
 function parseIdx(s){s=String(s||"").trim();if(!s)return 0;let neg=false;if(s[0]==="+"){neg=true;s=s.slice(1)}const n=parseFloat(s.replace(",","."));if(isNaN(n))return NaN;return neg?-n:n}
