@@ -313,18 +313,32 @@ function buildBoard(comp,entries,mode,kind){
     if(!a.started||a.nr)return 0;
     return (a.main-b.main)*sign;
   };
-  const cmpCb=(a,b)=>{if(!a.sg||!b.sg)return 0;for(let i=0;i<4;i++){const d=(a.sg[i]-b.sg[i])*sign;if(Math.abs(d)>1e-9)return d}return 0};
+  /* Countback compares completed cards only; within a tied score, finished cards sort ahead of unfinished ones. */
+  const cmpCb=(a,b)=>{
+    if(!a.sg||!b.sg)return a.sg?-1:b.sg?1:0;
+    for(let i=0;i<4;i++){const d=(a.sg[i]-b.sg[i])*sign;if(Math.abs(d)>1e-9)return d}
+    return 0;
+  };
   rows.sort((a,b)=>cmpMain(a,b)||cmpCb(a,b)||(b.thru-a.thru)||a.name.localeCompare(b.name));
-  rows.forEach((r,i)=>{
-    r.cb=false;r.tie=false;
-    if(!r.started){r.pos="–";return}
-    if(r.nr){r.pos="NR";return}
-    const p=rows[i-1];
-    if(p&&p.started&&!p.nr&&cmpMain(p,r)===0){
-      if(cmpCb(p,r)===0){r.posN=p.posN;r.tie=p.tie=true}
-      else{r.posN=i+1;if(r.sg&&p.sg){r.cb=p.cb=true}}
-    }else r.posN=i+1;
-  });
+  /* Positions go by groups on the same score. If anyone in the group hasn't finished, the whole group is tied
+     (countback can't be applied yet). If everyone has finished, countback separates them (marked C/B);
+     anyone still level after countback stays tied. */
+  rows.forEach(r=>{r.cb=false;r.tie=false;r.posN=0;r.pos=!r.started?"–":r.nr?"NR":""});
+  for(let i=0;i<rows.length;){
+    const r=rows[i];
+    if(!r.started||r.nr){i++;continue}
+    let j=i;while(j+1<rows.length&&rows[j+1].started&&!rows[j+1].nr&&cmpMain(r,rows[j+1])===0)j++;
+    const grp=rows.slice(i,j+1);
+    if(grp.length>1&&!grp.every(x=>x.sg))grp.forEach(x=>{x.posN=i+1;x.tie=true});
+    else grp.forEach((x,k)=>{
+      const prev=grp[k-1],next=grp[k+1];
+      const sameAsPrev=prev&&cmpCb(prev,x)===0,sameAsNext=next&&cmpCb(x,next)===0;
+      x.posN=sameAsPrev?prev.posN:i+k+1;
+      x.tie=!!(sameAsPrev||sameAsNext);
+      x.cb=grp.length>1&&!x.tie;
+    });
+    i=j+1;
+  }
   rows.forEach(r=>{if(r.posN)r.pos=(r.tie?"T":"")+r.posN});
   return {rows,points};
 }
