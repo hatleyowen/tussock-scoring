@@ -688,7 +688,7 @@ function renderEntryList(comp){
   let h="";
   list.forEach((e,n)=>{
     const ph=playingHcp(e,comp),played=Object.values(e.scores||{}).filter(v=>v!=null).length;
-    h+='<div class="erow"><span class="ecount" aria-label="Entry '+(n+1)+'">'+(n+1)+'</span><div class="who"><b>'+esc(dispName(e,comp))+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo&&canSeeDetails(comp)?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+partnerText(e,entries,comp)+'</div>':'')+(e.members?'<div class="note">'+esc(dispMembers(e.members,comp))+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
+    h+='<div class="erow"><span class="ecount" aria-label="Entry '+(n+1)+'">'+(n+1)+'</span><div class="who"><b>'+esc(dispName(e,comp))+'</b> <span class="muted num">· '+(comp.format==="scramble"?"team hcp "+ph:"index "+fmtIdx(e.index)+" → playing "+ph)+'</span>'+(e.golfNo&&canSeeDetails(comp)?'<div class="note">NZ Golf no. <span class="num">'+esc(e.golfNo)+'</span></div>':'')+(e.team?'<div class="note">Pair: '+esc(e.team)+partnerText(e,entries,comp)+'</div>':'')+(e.group?'<div class="note">'+esc(e.group)+'</div>':'')+(e.members?'<div class="note">'+esc(dispMembers(e.members,comp))+'</div>':'')+(played?'<div class="note">'+played+' holes scored</div>':'')+'</div>';
     if(canAdmin()){
       const conf=S.confirm==="e:"+e.id;
       h+='<div class="row"><button data-edit="'+esc(e.id)+'">Edit</button><button class="'+(conf?"danger":"ghost")+'" data-del="'+esc(e.id)+'">'+(conf?"Confirm remove":"Remove")+'</button></div>';
@@ -708,9 +708,48 @@ function parseIdx(s){s=String(s||"").trim();if(!s)return 0;let neg=false;if(s[0]
 function byHandicap(a,b){return ((Number(a.index)||0)-(Number(b.index)||0))||String(a.name||"").localeCompare(String(b.name||""))}
 function randInt(n){const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n}
 /* Set the pair name on several entries at once ([[entry, team], ...]). */
-async function setTeams(comp,changes){
-  if(comp.local){changes.forEach(([e,t])=>{e.team=t});return}
-  await Promise.all(changes.map(([e,t])=>S.db.doc("comps/"+comp.id+"/players/"+e.id).update({team:t})));
+async function setTeams(comp,changes){return setField(comp,"team",changes)}
+/* Set one field on several entries at once ([[entry, value], ...]). */
+async function setField(comp,field,changes){
+  if(comp.local){changes.forEach(([e,v])=>{e[field]=v});return}
+  await Promise.all(changes.map(([e,v])=>S.db.doc("comps/"+comp.id+"/players/"+e.id).update({[field]:v})));
+}
+/* Organiser tools: put two pairs together at random into each 4-ball, or clear all groups. */
+function bindGroupTools(comp){
+  const gen=$("#gGen"),clr=$("#gClear"),msg=$("#gMsg"),box=$("#gConfirm"),yes=$("#gYes"),no=$("#gNo");if(!gen)return;
+  const done=()=>renderEntryList(comp);
+  gen.onclick=async()=>{
+    const field=curEntries();
+    if(field.some(e=>(e.group||"").trim())){msg.textContent="Some players are already in a group. Clear all groups first, then create 4-balls.";return}
+    const byPair=new Map();
+    field.forEach(e=>{const t=(e.team||"").trim();if(t){if(!byPair.has(t))byPair.set(t,[]);byPair.get(t).push(e)}});
+    const pairs=[...byPair.values()];
+    if(pairs.length<2){msg.textContent="Make at least two pairs first, using Generate random pairs above.";return}
+    for(let i=pairs.length-1;i>0;i--){const j=randInt(i+1);[pairs[i],pairs[j]]=[pairs[j],pairs[i]]}
+    const changes=[];let n=0;
+    for(let i=0;i<pairs.length;i+=2){n++;const g="Group "+n;pairs[i].concat(pairs[i+1]||[]).forEach(e=>changes.push([e,g]))}
+    const unpaired=field.filter(e=>!(e.team||"").trim());
+    gen.disabled=clr.disabled=true;msg.textContent="Making groups…";
+    try{
+      await setField(comp,"group",changes);
+      msg.textContent="Made "+n+" group"+(n===1?"":"s")+"."+(pairs.length%2?" Group "+n+" is a 2-ball (odd number of pairs).":"")+(unpaired.length?" Not grouped (no pair): "+unpaired.map(e=>e.name).join(", ")+".":"");
+      done();
+    }catch(err){msg.textContent="";writeErr(err)}
+    finally{gen.disabled=clr.disabled=false}
+  };
+  const closeBox=()=>{box.hidden=true;clr.disabled=gen.disabled=false};
+  clr.onclick=()=>{
+    if(!curEntries().some(e=>(e.group||"").trim())){msg.textContent="No one is in a group yet.";return}
+    msg.textContent="";box.hidden=false;clr.disabled=gen.disabled=true;no.focus();
+  };
+  no.onclick=()=>{closeBox();msg.textContent="Groups kept.";clr.focus()};
+  yes.onclick=async()=>{
+    const grouped=curEntries().filter(e=>(e.group||"").trim());
+    yes.disabled=no.disabled=true;msg.textContent="Clearing groups…";
+    try{await setField(comp,"group",grouped.map(e=>[e,""]));msg.textContent="Cleared all groups.";done()}
+    catch(err){msg.textContent="";writeErr(err)}
+    finally{yes.disabled=no.disabled=false;closeBox()}
+  };
 }
 function bindPairTools(comp){
   const gen=$("#pGen"),clr=$("#pClear"),msg=$("#pMsg");if(!gen)return;
@@ -812,6 +851,8 @@ function compForm(host,comp){
   /* Random pair tools (existing competitions only). Their buttons are type="button" so they never submit this form. */
   if(comp)h+='<div id="pairTools" class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:10px"><h3>Pairs</h3><p class="note" style="margin:0">Random pairs split the field in half by handicap index. Each player in the lower half is drawn a random partner from the higher half, and both get the same pair name. With an odd number of players, one is left without a partner. Pairs are saved straight away; you don\'t need to press Save changes.</p><div class="row"><button type="button" id="pGen">Generate random pairs</button><button type="button" class="danger" id="pClear">Clear all pairs</button></div><div id="pConfirm" class="stack" style="gap:10px;border:1px solid var(--under);border-radius:10px;padding:12px 14px;background:var(--surface)" role="alertdialog" aria-labelledby="pConfirmText" hidden><p id="pConfirmText" style="margin:0;font-weight:600">Are you sure? This will remove all Team pairing for the competition.</p><div class="row"><button type="button" class="danger" id="pYes">Yes, clear all pairs</button><button type="button" id="pNo">Cancel</button></div></div><span class="note" id="pMsg" role="status"></span></div>';
   h+='<label class="f" id="tAllowWrap" style="max-width:220px">Pairs handicap allowance %<input id="f-tallow" inputmode="numeric" value="'+esc(tAl)+'"></label></div>';
+  /* 4-ball groups: two pairs per group, so partners always play together (existing competitions only). */
+  if(comp)h+='<div id="groupTools" class="banner stack" style="gap:8px"><h3>Groups (4-balls)</h3><p class="note" style="margin:0">Puts two pairs together at random to make each 4-ball, so partners always play together. With an odd number of pairs, one pair plays as a 2-ball. Players without a pair aren\'t grouped. Groups are saved straight away; you don\'t need to press Save changes.</p><div class="row"><button type="button" id="gGen">Create 4-balls</button><button type="button" class="danger" id="gClear">Clear all groups</button></div><div id="gConfirm" class="stack" style="gap:10px;border:1px solid var(--under);border-radius:10px;padding:12px 14px;background:var(--surface)" role="alertdialog" aria-labelledby="gConfirmText" hidden><p id="gConfirmText" style="margin:0;font-weight:600">Are you sure? This will remove all groupings for the competition.</p><div class="row"><button type="button" class="danger" id="gYes">Yes, clear all groups</button><button type="button" id="gNo">Cancel</button></div></div><span class="note" id="gMsg" role="status"></span></div>';
   h+='<div class="grid"><label class="f">Course and tees<input id="f-course" value="'+esc(c.name)+'" placeholder="e.g. Old Course, yellow tees" autocomplete="off"></label>';
   h+='<label class="f">Course rating<input id="f-rating" inputmode="decimal" value="'+esc(c.rating)+'"></label>';
   h+='<label class="f">Slope rating<input id="f-slope" inputmode="numeric" value="'+esc(c.slope)+'"></label></div>';
@@ -826,13 +867,14 @@ function compForm(host,comp){
   if(comp&&!comp.local&&S.isAdmin)h+='<div style="border-top:1px solid var(--line);padding-top:14px" class="row"><button type="button" class="'+(S.confirm==="comp"?"danger":"ghost")+'" id="cDel">'+(S.confirm==="comp"?"Confirm: delete competition and all scores":"Delete competition")+'</button></div>';
   h+='</form>';
   host.innerHTML=h;
-  if(comp)bindPairTools(comp);
+  if(comp){bindPairTools(comp);bindGroupTools(comp)}
   const upd=()=>{const k=$("#f-format").value;$("#fmtBlurb").textContent=FORMATS[k].blurb;$("#allowWrap").hidden=k==="scramble";/* Better-ball is pairs-only: keep the box for the pair tools but hide the side-game options. */
     const bb=k==="betterball",on=$("#f-teams").checked,pt=$("#pairTools");
     $("#teamWrap").hidden=!(k==="stroke"||k==="stableford"||(bb&&pt));
     $("#teamChkWrap").hidden=$("#teamNote").hidden=bb;
     $("#tAllowWrap").hidden=bb||!on;
-    if(pt)pt.hidden=!(bb||on);let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
+    if(pt)pt.hidden=!(bb||on);
+    const gt=$("#groupTools");if(gt)gt.hidden=!(bb||((k==="stroke"||k==="stableford")&&on));let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
   upd();
   $("#f-format").onchange=()=>{$("#f-allow").value=FORMATS[$("#f-format").value].allowance;upd()};
   host.querySelectorAll('[id^="par-"]').forEach(x=>x.oninput=upd);

@@ -44,7 +44,7 @@ Plain HTML, CSS and JavaScript with no build step, served by GitHub Pages:
 Data lives in Cloud Firestore (project `tussock-scoring`, Sydney region):
 
 - `comps/{compId}`: competition settings, course card (`pars`, `si`, `rating`, `slope`) and the optional pairs game (`teams: {enabled, allowance}`)
-- `comps/{compId}/players/{entryId}`: entry name, handicap index, NZ Golf member number (`golfNo`, optional), pair/team, and `scores` as a map of hole number to strokes (or `"P"` for a pickup). Scores are saved one hole at a time, so markers on different phones don't overwrite each other.
+- `comps/{compId}/players/{entryId}`: entry name, handicap index, NZ Golf member number (`golfNo`, optional), pair/team, 4-ball group (`group`, e.g. "Group 3", set by the organisers' Create 4-balls tool), and `scores` as a map of hole number to strokes (or `"P"` for a pickup). Scores are saved one hole at a time, so markers on different phones don't overwrite each other.
 - `comps/{compId}/members/{uid}`: phones that entered the competition code
 - `secrets/{compId}`: `{code}`, the competition code. Only organisers can read it.
 - `admins/{uid}`: the organiser list
