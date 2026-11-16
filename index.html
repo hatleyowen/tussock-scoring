@@ -622,7 +622,6 @@ function renderSetup(tab,comp){
     if(team)h+='<label class="f">Pair name<input id="e-team" placeholder="Same name for both partners" autocomplete="off"></label>';
     if(scr)h+='<label class="f">Players<input id="e-members" placeholder="Names, comma separated" autocomplete="off"></label>';
     h+='</div><div class="row"><button class="primary" type="submit" id="eSubmit">Add</button><button type="button" class="ghost" id="eCancel" hidden>Cancel</button><span class="err" id="eErr"></span></div>';
-    if(team)h+='<div class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px"><h3>Pairs</h3><p class="note" style="margin:0">Random pairs split the field in half by handicap index. Each player in the lower half is drawn a random partner from the higher half, and both get the same pair name. With an odd number of players, one is left without a partner.</p><div class="row"><button type="button" id="pGen">Generate random pairs</button><button type="button" class="danger" id="pClear">Clear all pairs</button></div><div id="pConfirm" class="banner stack" style="gap:10px;border-color:var(--under)" role="alertdialog" aria-labelledby="pConfirmText" hidden><p id="pConfirmText" style="margin:0;font-weight:600">Are you sure? This will remove all Team pairing for the competition.</p><div class="row"><button type="button" class="danger" id="pYes">Yes, clear all pairs</button><button type="button" id="pNo">Cancel</button></div></div><span class="note" id="pMsg" role="status"></span></div>';
     h+='<p class="note" style="margin:0">'+(scr?"Enter the team's playing handicap directly.":"Playing handicap = handicap index × slope ÷ 113 + (course rating − par), rounded, then × "+esc(comp.allowance)+"% allowance. Write a plus handicap as +1.2.")+'</p></form>';
   }
   h+='</div>';
@@ -721,7 +720,6 @@ function bindPairTools(comp){
   };
 }
 function bindEntryForm(comp){
-  bindPairTools(comp);
   const form=$("#eform");
   const reset=()=>{S.editEntry=null;form.reset();$("#eformTitle").textContent=comp.format==="scramble"?"Add a team":"Add a player";$("#eSubmit").textContent="Add";$("#eCancel").hidden=true;$("#eErr").textContent=""};
   $("#eCancel").onclick=reset;
@@ -781,8 +779,10 @@ function compForm(host,comp){
   h+='<label class="f" id="allowWrap">Handicap allowance %<input id="f-allow" inputmode="numeric" value="'+esc(comp?comp.allowance:FORMATS[fmt].allowance)+'"></label>';
   h+='</div><p class="note" id="codeHelp" style="margin:0">Code: letters and numbers only, up to 12 characters, different from every other competition.</p><p class="note" id="fmtBlurb" style="margin:0"></p>';
   const tOn=!!(comp&&comp.teams&&comp.teams.enabled),tAl=comp?teamAllowance(comp):85;
-  h+='<div id="teamWrap" class="banner stack" style="gap:10px"><label class="row" style="gap:10px;font-weight:600;cursor:pointer"><input type="checkbox" id="f-teams" style="width:20px;min-height:20px;margin:0"'+(tOn?" checked":"")+'> Also run a pairs competition (better-ball Stableford)</label>';
-  h+='<p class="note" style="margin:0">Same scores, second leaderboard. Partners share a pair name, and the better Stableford score of the two counts on each hole.</p>';
+  h+='<div id="teamWrap" class="banner stack" style="gap:10px"><label class="row" id="teamChkWrap" style="gap:10px;font-weight:600;cursor:pointer"><input type="checkbox" id="f-teams" style="width:20px;min-height:20px;margin:0"'+(tOn?" checked":"")+'> Also run a pairs competition (better-ball Stableford)</label>';
+  h+='<p class="note" id="teamNote" style="margin:0">Same scores, second leaderboard. Partners share a pair name, and the better Stableford score of the two counts on each hole.</p>';
+  /* Random pair tools (existing competitions only). Their buttons are type="button" so they never submit this form. */
+  if(comp)h+='<div id="pairTools" class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:10px"><h3>Pairs</h3><p class="note" style="margin:0">Random pairs split the field in half by handicap index. Each player in the lower half is drawn a random partner from the higher half, and both get the same pair name. With an odd number of players, one is left without a partner. Pairs are saved straight away; you don\'t need to press Save changes.</p><div class="row"><button type="button" id="pGen">Generate random pairs</button><button type="button" class="danger" id="pClear">Clear all pairs</button></div><div id="pConfirm" class="stack" style="gap:10px;border:1px solid var(--under);border-radius:10px;padding:12px 14px;background:var(--surface)" role="alertdialog" aria-labelledby="pConfirmText" hidden><p id="pConfirmText" style="margin:0;font-weight:600">Are you sure? This will remove all Team pairing for the competition.</p><div class="row"><button type="button" class="danger" id="pYes">Yes, clear all pairs</button><button type="button" id="pNo">Cancel</button></div></div><span class="note" id="pMsg" role="status"></span></div>';
   h+='<label class="f" id="tAllowWrap" style="max-width:220px">Pairs handicap allowance %<input id="f-tallow" inputmode="numeric" value="'+esc(tAl)+'"></label></div>';
   h+='<div class="grid"><label class="f">Course and tees<input id="f-course" value="'+esc(c.name)+'" placeholder="e.g. Old Course, yellow tees" autocomplete="off"></label>';
   h+='<label class="f">Course rating<input id="f-rating" inputmode="decimal" value="'+esc(c.rating)+'"></label>';
@@ -798,7 +798,13 @@ function compForm(host,comp){
   if(comp&&!comp.local&&S.isAdmin)h+='<div style="border-top:1px solid var(--line);padding-top:14px" class="row"><button type="button" class="'+(S.confirm==="comp"?"danger":"ghost")+'" id="cDel">'+(S.confirm==="comp"?"Confirm: delete competition and all scores":"Delete competition")+'</button></div>';
   h+='</form>';
   host.innerHTML=h;
-  const upd=()=>{const k=$("#f-format").value;$("#fmtBlurb").textContent=FORMATS[k].blurb;$("#allowWrap").hidden=k==="scramble";$("#teamWrap").hidden=!(k==="stroke"||k==="stableford");$("#tAllowWrap").hidden=!$("#f-teams").checked;let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
+  if(comp)bindPairTools(comp);
+  const upd=()=>{const k=$("#f-format").value;$("#fmtBlurb").textContent=FORMATS[k].blurb;$("#allowWrap").hidden=k==="scramble";/* Better-ball is pairs-only: keep the box for the pair tools but hide the side-game options. */
+    const bb=k==="betterball",on=$("#f-teams").checked,pt=$("#pairTools");
+    $("#teamWrap").hidden=!(k==="stroke"||k==="stableford"||(bb&&pt));
+    $("#teamChkWrap").hidden=$("#teamNote").hidden=bb;
+    $("#tAllowWrap").hidden=bb||!on;
+    if(pt)pt.hidden=!(bb||on);let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
   upd();
   $("#f-format").onchange=()=>{$("#f-allow").value=FORMATS[$("#f-format").value].allowance;upd()};
   host.querySelectorAll('[id^="par-"]').forEach(x=>x.oninput=upd);
