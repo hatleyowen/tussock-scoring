@@ -4,7 +4,7 @@ A shared golf competition scoring app. Set up the course card and the field, let
 
 Live version: https://hatleyowen.github.io/tussock-scoring/ (GitHub Pages + Firebase).
 
-The earlier claude.ai artifact version (https://claude.ai/artifact/RGRfwn14mT4kq9UMLQrkES) is kept as a fallback.
+The earlier claude.ai artifact version (https://claude.ai/artifact/RGRfwn14mT4kq9UMLQrkES) now just shows a "moved" notice linking to the site above.
 
 ## Who can do what
 
