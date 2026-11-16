@@ -622,7 +622,7 @@ function renderSetup(tab,comp){
     if(team)h+='<label class="f">Pair name<input id="e-team" placeholder="Same name for both partners" autocomplete="off"></label>';
     if(scr)h+='<label class="f">Players<input id="e-members" placeholder="Names, comma separated" autocomplete="off"></label>';
     h+='</div><div class="row"><button class="primary" type="submit" id="eSubmit">Add</button><button type="button" class="ghost" id="eCancel" hidden>Cancel</button><span class="err" id="eErr"></span></div>';
-    if(team)h+='<div class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px"><h3>Pairs</h3><p class="note" style="margin:0">Random pairs split the field in half by handicap index. Each player in the lower half is drawn a random partner from the higher half, and both get the same pair name. With an odd number of players, one is left without a partner.</p><div class="row"><button type="button" id="pGen">Generate random pairs</button><button type="button" class="danger" id="pClear">Clear all pairs</button></div><span class="note" id="pMsg" role="status"></span></div>';
+    if(team)h+='<div class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px"><h3>Pairs</h3><p class="note" style="margin:0">Random pairs split the field in half by handicap index. Each player in the lower half is drawn a random partner from the higher half, and both get the same pair name. With an odd number of players, one is left without a partner.</p><div class="row"><button type="button" id="pGen">Generate random pairs</button><button type="button" class="danger" id="pClear">Clear all pairs</button></div><div id="pConfirm" class="banner stack" style="gap:10px;border-color:var(--under)" role="alertdialog" aria-labelledby="pConfirmText" hidden><p id="pConfirmText" style="margin:0;font-weight:600">Are you sure? This will remove all Team pairing for the competition.</p><div class="row"><button type="button" class="danger" id="pYes">Yes, clear all pairs</button><button type="button" id="pNo">Cancel</button></div></div><span class="note" id="pMsg" role="status"></span></div>';
     h+='<p class="note" style="margin:0">'+(scr?"Enter the team's playing handicap directly.":"Playing handicap = handicap index × slope ÷ 113 + (course rating − par), rounded, then × "+esc(comp.allowance)+"% allowance. Write a plus handicap as +1.2.")+'</p></form>';
   }
   h+='</div>';
@@ -703,14 +703,21 @@ function bindPairTools(comp){
     }catch(err){msg.textContent="";writeErr(err)}
     finally{gen.disabled=clr.disabled=false}
   };
-  clr.onclick=async()=>{
+  /* In-page confirmation rather than the browser's confirm() pop-up, which some phone browsers,
+     home-screen apps and embedded views suppress. */
+  const box=$("#pConfirm"),yes=$("#pYes"),no=$("#pNo");
+  const closeBox=()=>{box.hidden=true;clr.disabled=gen.disabled=false};
+  clr.onclick=()=>{
+    if(!curEntries().some(e=>(e.team||"").trim())){msg.textContent="No one has a pair name yet.";return}
+    msg.textContent="";box.hidden=false;clr.disabled=gen.disabled=true;no.focus();
+  };
+  no.onclick=()=>{closeBox();msg.textContent="Pairs kept.";clr.focus()};
+  yes.onclick=async()=>{
     const paired=curEntries().filter(e=>(e.team||"").trim());
-    if(!paired.length){msg.textContent="No one has a pair name yet.";return}
-    if(!confirm("Are you sure? This will remove all Team pairing for the competition."))return;
-    gen.disabled=clr.disabled=true;msg.textContent="Clearing pairs…";
+    yes.disabled=no.disabled=true;msg.textContent="Clearing pairs…";
     try{await setTeams(comp,paired.map(e=>[e,""]));msg.textContent="Cleared all pairs.";done()}
     catch(err){msg.textContent="";writeErr(err)}
-    finally{gen.disabled=clr.disabled=false}
+    finally{yes.disabled=no.disabled=false;closeBox()}
   };
 }
 function bindEntryForm(comp){
