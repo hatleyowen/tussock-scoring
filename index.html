@@ -532,21 +532,25 @@ function renderBoard(tab,comp){
   if(kind==="team"){const unp=entries.filter(e=>!(e.team||"").trim()).length;h+=' · '+teamAllowance(comp)+'% allowance'+(unp?' · '+unp+' player'+(unp===1?'':'s')+' not in a pair':'')}
   h+='</span></div>';
   if(!points)h+='<div class="seg" role="group" aria-label="Leaderboard type"><button aria-pressed="'+(S.boardMode==="net")+'" data-mode="net">Net</button><button aria-pressed="'+(S.boardMode==="gross")+'" data-mode="gross">Gross</button></div>';
-  h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(isPairs?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th class="c-wide">'+(comp.format==="scramble"?"Team hcp":"Playing hcp")+'</th>';
-  h+=points?'<th>Pts</th>':'<th class="c-wide">Gross</th><th class="c-wide">'+(mode==="net"?"Net":"")+'</th><th>To par</th>';
+  h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(isPairs?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th class="c-wide">'+(comp.format==="scramble"?"Team hcp":"HCP")+'</th>';
+  /* Stroke play also shows each player's Stableford points (same handicap and allowance), for interest. */
+  const showPts=!points&&comp.format==="stroke";
+  h+=points?'<th>Pts</th>':'<th class="c-wide">Gross</th><th class="c-wide">'+(mode==="net"?"Net":"")+'</th>'+(showPts?'<th class="c-wide" title="Stableford points">Pts</th>':'')+'<th>To par</th>';
   h+='</tr></thead><tbody>';
-  const cols=points?5:7;
+  const cols=points?5:(showPts?8:7);
   rows.forEach(r=>{
     const thru=!r.started?"–":r.complete?"F":r.thru;
     const grossTxt=r.started&&!r.nr?String(r.gross):"";
     const netTxt=!points&&mode==="net"&&r.complete&&!r.nr?String(r.gross-r.ph):"";
-    const mline=['Hcp '+r.phLabel].concat(points?[]:[grossTxt?grossTxt+' gross':'',netTxt?netTxt+' net':'']).filter(Boolean).join(' · ');
+    const ptsTxt=showPts&&r.started?String(r.pts):"";
+    const mline=['Hcp '+r.phLabel].concat(points?[]:[grossTxt?grossTxt+' gross':'',netTxt?netTxt+' net':'',ptsTxt?ptsTxt+' pts':'']).filter(Boolean).join(' · ');
     h+='<tr class="ent" data-card="'+esc(r.key)+'" aria-expanded="'+(S.openCard===r.key)+'"><td class="pos">'+esc(r.pos)+(r.cb?'<span class="cb" title="Decided on countback">C/B</span>':'')+'</td>';
     h+='<td><div class="nm">'+esc(r.name)+'</div>'+(r.sub?'<div class="sub">'+esc(r.sub)+'</div>':'')+'<div class="sub m-line">'+esc(mline)+'</div></td><td>'+thru+'</td><td class="c-wide">'+esc(r.phLabel)+'</td>';
     if(points)h+='<td><span class="big">'+(r.started?r.pts:"–")+'</span></td>';
     else{
       h+='<td class="c-wide">'+(r.complete&&!r.nr?r.gross:r.started?'<span class="muted">'+(r.nr?"NR":r.gross)+'</span>':"–")+'</td>';
       h+='<td class="c-wide">'+netTxt+'</td>';
+      if(showPts)h+='<td class="c-wide">'+(r.started?(r.complete?ptsTxt:'<span class="muted">'+ptsTxt+'</span>'):"–")+'</td>';
       h+='<td><span class="big">'+(!r.started?"–":r.nr?'<span class="muted">NR</span>':toPar(r.main))+'</span></td>';
     }
     h+='</tr>';
