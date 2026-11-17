@@ -238,6 +238,9 @@ table.stats{width:100%;border-collapse:collapse}
 .stats-box[open] .chev{transform:rotate(180deg)}
 .stats-box[open]>summary{border-bottom:1px solid var(--line);border-radius:10px 10px 0 0}
 .stats-body{padding:14px 16px 16px}
+.card-box{margin-top:0}
+/* Room below the scoring panel so it can always scroll up to the top of the screen. */
+.holes-wrap{min-height:calc(100vh - 24px);min-height:calc(100dvh - 24px)}
 @media (prefers-reduced-motion:reduce){.stats-box .chev{transition:none}}
 /* Phones: the six score columns share the width evenly, with short headings. (After the rules above so it wins.) */
 @media (max-width:560px){
@@ -574,7 +577,7 @@ function route(){
   if(S.view==="comp"&&S.tab==="score"){const pc=curComp();if(pc&&h!=="c-"+pc.id+"-score")announceHole(pc,S.hole)}
   if(h==="new"){S.view="new";S.compId=null}
   else if((m=/^c-([A-Za-z0-9_-]+?)(?:-(board|score|setup|stats))?$/.exec(h))){
-    if(S.compId!==m[1]){S.openCard=null;S.editEntry=null;S.hole=(LS.get("hole:"+m[1])||1)}
+    if(S.compId!==m[1]){S.openCard=null;S.editEntry=null;S.cardOpen=true;S.hole=(LS.get("hole:"+m[1])||1)}
     S.view="comp";S.compId=m[1];S.tab=m[2]||"board";
     if(S.tab==="stats"){S.tab="board";S.statsOpen=true}/* old Stats-tab links open the leaderboard with Stats expanded */
   }else{S.view="home";S.compId=null}
@@ -766,7 +769,8 @@ function renderScore(tab,comp){
   const c=comp.course,hole=S.hole,i=hole-1;
   const chip=e=>'<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(dispName(e,comp))+'</button>';
   const groups=fieldGroups(entries);
-  let h='<div class="stack"><div class="panel stack"><div><div class="eyebrow">Your card</div><p class="note" style="margin:2px 0 0">Pick who you\'re marking for, up to four.'+(groups?' Players are listed in their groups; tap <b>Mark this group</b> to pick a whole group.':'')+'</p></div>';
+  const picked=grp.map(id=>entries.find(e=>e.id===id)).filter(Boolean).map(e=>dispName(e,comp));
+  let h='<div class="stack"><details class="stats-box card-box" id="cardBox"'+(S.cardOpen!==false?' open':'')+'><summary><span class="sum-t">Your card</span><span class="sum-d">'+(picked.length?esc(picked.join(", ")):'Pick who you\'re marking for')+'</span><svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="stack stats-body"><p class="note" style="margin:0">Pick who you\'re marking for, up to four.'+(groups?' Players are listed in their groups; tap <b>Mark this group</b> to pick a whole group.':'')+'</p>';
   if(!groups)h+='<div class="chips">'+entries.map(chip).join("")+'</div>';
   else{
     h+='<div class="cgroups">';
@@ -776,7 +780,7 @@ function renderScore(tab,comp){
     });
     h+='</div>';
   }
-  h+='</div>';
+  h+='</div></details>';
   if(!canScore(comp)){
     h+='<div class="panel stack"><div><div class="eyebrow">Unlock scoring</div><h3>Enter the competition code</h3><p class="note" style="margin:2px 0 0">Ask the organiser for the code. You only need to enter it once on this phone.</p></div>';
     if(!S.db)h+='<p class="note" style="margin:0">Scoring needs a connection. Check your signal and reload.</p>';
@@ -785,7 +789,7 @@ function renderScore(tab,comp){
   }
   const sel=grp.map(id=>entries.find(e=>e.id===id)).filter(Boolean);
   if(sel.length){
-    h+='<div class="panel stack"><div class="holes" role="group" aria-label="Choose hole">';
+    h+='<div class="holes-wrap"><div class="panel stack" id="holesPanel"><div class="holes" role="group" aria-label="Choose hole">';
     for(let k=1;k<=18;k++){const done=sel.every(e=>scoreAt(e,k)!=null);h+='<button data-hole="'+k+'" aria-current="'+(k===hole)+'" class="'+(done?"done":"")+'" aria-label="Hole '+k+(done?", scored":"")+'">'+k+'</button>'}
     h+='</div><div class="hole-head"><button aria-label="Previous hole" data-hole="'+(hole>1?hole-1:18)+'">‹</button><div style="text-align:center"><div class="eyebrow">Hole</div><div class="h">'+hole+'</div></div><div class="meta"><span>Par <b>'+c.pars[i]+'</b></span><span>S.I. <b>'+c.si[i]+'</b></span></div><button aria-label="Next hole" data-hole="'+(hole<18?hole+1:1)+'">›</button></div>';
     sel.forEach(e=>{
@@ -794,10 +798,12 @@ function renderScore(tab,comp){
       const dis=canScore(comp)?"":" disabled";
       h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(dispName(e,comp))+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(dispName(e,comp))+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(dispName(e,comp))+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
     });
-    h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div>';
+    h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div></div>';
   }
   h+='</div>';
   tab.innerHTML=h;
+  /* Ignore toggle events from a card box a later render has already replaced. */
+  const cb=$("#cardBox");if(cb)cb.ontoggle=()=>{if(cb.isConnected)S.cardOpen=cb.open};
   const jf=$("#jform");
   if(jf)jf.onsubmit=async ev=>{
     ev.preventDefault();
@@ -1116,6 +1122,17 @@ function compForm(host,comp){
   };
 }
 
+/* Closes "Your card" once the card is set (a whole group, or a fourth player) and brings the
+   hole picker to the top of the screen. */
+function collapseCard(){
+  S.cardOpen=false;render();
+  requestAnimationFrame(()=>{
+    const hp=$("#holesPanel");if(!hp)return;
+    const top=hp.getBoundingClientRect().top+scrollY-12;
+    window.scrollTo({top:Math.max(0,top),behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+  });
+}
+
 /* ---------- events ---------- */
 document.addEventListener("click",ev=>{
   const t=ev.target.closest("button,[data-card]");if(!t)return;
@@ -1131,13 +1148,16 @@ document.addEventListener("click",ev=>{
   if(t.dataset.card){S.openCard=S.openCard===t.dataset.card?null:t.dataset.card;render();return}
   if(t.dataset.grpAll&&comp){
     const ids=curEntries().filter(e=>(e.group||"").trim()===t.dataset.grpAll).map(e=>e.id).slice(0,4);
-    LS.set(groupKey(comp),ids);render();return;
+    LS.set(groupKey(comp),ids);collapseCard();return;
   }
   if(t.dataset.grp&&comp){
     const entries=curEntries();let g=(LS.get(groupKey(comp))||(comp.local?["s3","s5"]:[])).filter(id=>entries.some(e=>e.id===id));
     const id=t.dataset.grp;
     if(g.includes(id))g=g.filter(x=>x!==id);else{if(g.length>=4){toast("A card holds up to four. Remove someone first.");return}g.push(id)}
-    LS.set(groupKey(comp),g);render();return;
+    LS.set(groupKey(comp),g);
+    if(g.length===4&&g[3]===id)collapseCard();/* the fourth player just went on */
+    else render();
+    return;
   }
   if(t.dataset.shoutX&&comp){dismissShout(comp,t.dataset.shoutX);return}
   if(t.dataset.hole&&comp){const was=S.hole;S.hole=+t.dataset.hole;if(was!==S.hole)announceHole(comp,was);LS.set("hole:"+comp.id,S.hole);render();return}
