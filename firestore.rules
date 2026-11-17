@@ -46,7 +46,7 @@ service cloud.firestore {
       }
 
       // Under-par shouts (birdie, eagle...) shown as a banner to everyone viewing the competition.
-      // Joined players create them when they move on from a hole, and can dismiss them for everyone.
+      // Joined players create them when they move on from a hole. Dismissing is per browser (not stored here).
       match /shouts/{shoutId} {
         allow read: if true;
         allow create: if isAdmin()
@@ -56,10 +56,7 @@ service cloud.firestore {
               && request.resource.data.hole is int
               && request.resource.data.hole >= 1 && request.resource.data.hole <= 18
               && request.resource.data.dismissed == false);
-        allow update: if isAdmin()
-          || (isMember(compId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dismissed']));
-        allow delete: if isAdmin();
+        allow update, delete: if isAdmin();
       }
 
       match /members/{uid} {

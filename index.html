@@ -447,9 +447,12 @@ function subscribeEntries(id){
 /* ---------- under-par shouts ----------
    When a marker moves off a hole, anyone in their card who scored under par on it gets a shout:
    comps/{id}/shouts/{entryId}_{hole} = {pid, hole, score, par, at, dismissed}. Everyone viewing the
-   competition sees it as a floating banner for SHOUT_MINUTES; scorers can dismiss it for everyone.
-   The name and score are read from the live entry, so a corrected score drops the banner. */
-const SHOUT_MINUTES=20,SAMPLE_SHOUTS=[];
+   competition sees it as a floating banner until they dismiss it; dismissing only hides it in that
+   browser (remembered in localStorage). The name and score are read from the live entry, so a
+   corrected score drops the banner. */
+const SAMPLE_SHOUTS=[];
+const SAMPLE_HIDDEN=[];
+function hiddenShouts(comp){return comp.local?SAMPLE_HIDDEN:(LS.get("shoutsHidden:"+comp.id)||[])}
 let shoutsUnsub=null;S.shouts={};
 function subscribeShouts(id){
   if(shoutsUnsub){shoutsUnsub();shoutsUnsub=null}
@@ -459,8 +462,8 @@ function subscribeShouts(id){
 }
 function shoutTime(s){return s.at&&s.at.toMillis?s.at.toMillis():(s.t||Date.now())}
 function activeShouts(comp){
-  const list=comp.local?SAMPLE_SHOUTS:(S.shouts[comp.id]||[]),entries=curEntries(),now=Date.now();
-  return list.filter(s=>!s.dismissed&&now-shoutTime(s)<SHOUT_MINUTES*60000).map(s=>{
+  const list=comp.local?SAMPLE_SHOUTS:(S.shouts[comp.id]||[]),entries=curEntries(),hidden=hiddenShouts(comp);
+  return list.filter(s=>!hidden.includes(s.id)).map(s=>{
     const e=entries.find(x=>x.id===s.pid),hole=Number(s.hole),par=comp.course.pars[hole-1],v=e&&scoreAt(e,hole);
     return e&&typeof v==="number"&&v<par?{s,e,hole,par,v,t:shoutTime(s)}:null;
   }).filter(Boolean).sort((a,b)=>b.t-a.t).slice(0,3);
@@ -469,11 +472,9 @@ function renderShouts(){
   const box=$("#shouts");if(!box)return;
   const comp=S.view==="comp"?curComp():null;
   if(!comp){box.innerHTML="";box.dataset.html="";return}
-  const can=canScore(comp);
-  const html=activeShouts(comp).map(x=>'<div class="shout" role="status"><span class="w">'+esc(holeWord(x.v,x.par))+'</span><span class="d"><b>'+esc(dispName(x.e,comp))+'</b> made '+x.v+' on hole '+x.hole+' (par '+x.par+')</span>'+(can?'<button class="x" data-shout-x="'+esc(x.s.id)+'" aria-label="Dismiss for everyone" title="Dismiss for everyone">×</button>':'')+'</div>').join("");
+  const html=activeShouts(comp).map(x=>'<div class="shout" role="status"><span class="w">'+esc(holeWord(x.v,x.par))+'</span><span class="d"><b>'+esc(dispName(x.e,comp))+'</b> made '+x.v+' on hole '+x.hole+' (par '+x.par+')</span><button class="x" data-shout-x="'+esc(x.s.id)+'" aria-label="Dismiss" title="Dismiss">×</button></div>').join("");
   if(box.dataset.html!==html){box.innerHTML=html;box.dataset.html=html}/* unchanged banners don't re-animate */
 }
-setInterval(renderShouts,60000);/* drops banners once they're SHOUT_MINUTES old */
 function myCard(comp){
   const entries=curEntries();
   let g=(LS.get(groupKey(comp))||[]).filter(id=>entries.some(e=>e.id===id));
@@ -483,7 +484,7 @@ function myCard(comp){
 function announceHole(comp,hole){
   if(!comp||!canScore(comp)||!(hole>=1&&hole<=18))return;
   const par=comp.course.pars[hole-1];
-  const sentKey="shouted:"+comp.id,sent=LS.get(sentKey)||[];
+  const sentKey="shouted:"+comp.id,sent=comp.local?[]:(LS.get(sentKey)||[]);/* the sample's shouts live in memory only */
   const have=comp.local?SAMPLE_SHOUTS:(S.shouts[comp.id]||[]);
   myCard(comp).forEach(e=>{
     const v=scoreAt(e,hole),id=e.id+"_"+hole;
@@ -493,14 +494,14 @@ function announceHole(comp,hole){
     if(comp.local)SAMPLE_SHOUTS.push(Object.assign({id,t:Date.now()},doc));
     else S.db.doc("comps/"+comp.id+"/shouts/"+id).set(Object.assign(doc,{at:S.db.now()})).catch(()=>{});
   });
-  LS.set(sentKey,sent.slice(-200));
+  if(!comp.local)LS.set(sentKey,sent.slice(-200));
   renderShouts();
 }
 function dismissShout(comp,id){
-  if(!canScore(comp))return;
-  if(comp.local){const s=SAMPLE_SHOUTS.find(x=>x.id===id);if(s)s.dismissed=true;renderShouts();return}
-  const s=(S.shouts[comp.id]||[]).find(x=>x.id===id);if(s)s.dismissed=true;renderShouts();
-  S.db.doc("comps/"+comp.id+"/shouts/"+id).update({dismissed:true}).catch(err=>{if(s)s.dismissed=false;writeErr(err);renderShouts()});
+  const hidden=hiddenShouts(comp);
+  if(!hidden.includes(id))hidden.push(id);
+  if(!comp.local)LS.set("shoutsHidden:"+comp.id,hidden.slice(-300));
+  renderShouts();
 }
 function writeErr(err){
   if(err&&err.code==="permission-denied"){toast("That change isn't allowed from this phone. Enter the competition code, or sign in as an organiser.");render();return}

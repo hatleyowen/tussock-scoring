@@ -45,7 +45,7 @@ Data lives in Cloud Firestore (project `tussock-scoring`, Sydney region):
 
 - `comps/{compId}`: competition settings, course card (`pars`, `si`, `rating`, `slope`) and the optional pairs game (`teams: {enabled, allowance}`)
 - `comps/{compId}/players/{entryId}`: entry name, handicap index, NZ Golf member number (`golfNo`, optional), pair/team, 4-ball group (`group`, e.g. "Group 3", set by the organisers' Create 4-balls tool), and `scores` as a map of hole number to strokes (or `"P"` for a pickup). Scores are saved one hole at a time, so markers on different phones don't overwrite each other.
-- `comps/{compId}/shouts/{entryId}_{hole}`: under-par announcements (`pid, hole, score, par, at, dismissed`). When a marker moves off a hole (or leaves *Enter scores*), anyone on their card who scored under par there gets one. Everyone viewing the competition sees it as a floating banner for 20 minutes; anyone who can enter scores can dismiss it for everyone. The banner reads the live score, so correcting the score removes it.
+- `comps/{compId}/shouts/{entryId}_{hole}`: under-par announcements (`pid, hole, score, par, at, dismissed`). When a marker moves off a hole (or leaves *Enter scores*), anyone on their card who scored under par there gets one. Everyone viewing the competition sees it as a floating banner (up to three at a time, newest first) until they dismiss it; dismissing only hides it in that browser. The banner reads the live score, so correcting the score removes it.
 - `comps/{compId}/members/{uid}`: phones that entered the competition code
 - `secrets/{compId}`: `{code}`, the competition code. Only organisers can read it.
 - `admins/{uid}`: the organiser list
