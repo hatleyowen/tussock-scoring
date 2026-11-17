@@ -507,7 +507,7 @@ function render(fromSnapshot){
 
 function renderHome(app){
   let h='<div class="stack">';
-  h+='<div class="comp-head"><div><div class="eyebrow">Competitions</div><h1>Competition Board</h1></div>';
+  h+='<div class="comp-head"><div><h1>Competitions</h1></div>';
   if(canAdmin())h+='<a class="btn primary" href="#new">New competition</a>';
   h+='</div>';
   if(!S.db&&S.dbState!=="connecting")h+='<div class="banner">The scoring database can\'t be reached, so live competitions aren\'t available right now. Check your connection and reload. You can still explore the sample round.</div>';
