@@ -85,11 +85,12 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:60
 .board-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 .board .m-line{display:none}
-.board th{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--sunk)}
-.board th:nth-child(2),.board td:nth-child(2){text-align:left}
-.board td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
+/* Leaderboard cell rules use ">" so they don't reach the scorecard table nested inside an expanded row. */
+.board>thead>tr>th{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--sunk)}
+.board>thead>tr>th:nth-child(2),.board>tbody>tr>td:nth-child(2){text-align:left}
+.board>tbody>tr>td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
 .board tr.ent{cursor:pointer}
-.board tr.ent:hover td{background:var(--sunk)}
+.board>tbody>tr.ent:hover>td{background:var(--sunk)}
 .board .pos{font-family:var(--f-display);font-weight:700;font-size:22px;width:56px;text-align:left}
 .board .nm{font-weight:600}
 .board .netv{font-weight:700;color:var(--fg)}
@@ -97,7 +98,7 @@ table.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
 .board .big{font-family:var(--f-display);font-weight:700;font-size:26px;line-height:1}
 .u{color:var(--under)} .o{color:var(--over)}
 .cb{font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--muted);vertical-align:super;margin-left:3px}
-.board tr.card-row td{padding:0 0 12px;background:var(--surface)}
+.board>tbody>tr.card-row>td{padding:0 0 12px;background:var(--surface)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .seg button{border:none;border-radius:0;min-height:34px;padding:4px 12px;background:var(--surface);color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
@@ -174,9 +175,9 @@ table.course{border-collapse:collapse;min-width:640px;width:100%}
   .top-right{grid-column:2}
   .board .c-wide{display:none}
   .board .m-line{display:block}
-  .board th,.board td{padding:8px 6px}
-  .board th:first-child,.board td:first-child{padding-left:10px}
-  .board th:last-child,.board td:last-child{padding-right:10px}
+  .board>thead>tr>th,.board>tbody>tr>td{padding:8px 6px}
+  .board>thead>tr>th:first-child,.board>tbody>tr>td:first-child{padding-left:10px}
+  .board>thead>tr>th:last-child,.board>tbody>tr>td:last-child{padding-right:10px}
   .board .pos{width:44px;font-size:19px}
   .board .big{font-size:23px}
   .board .nm{overflow-wrap:anywhere}
