@@ -503,7 +503,7 @@ function render(fromSnapshot){
   if(S.view==="home")return renderHome(app);
   if(S.view==="new")return fromSnapshot?null:renderCompForm(app,null);
   const comp=curComp();
-  if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">Home</a></div></div>':'<p class="muted">Loading competition…</p>';return}
+  if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">All competitions</a></div></div>':'<p class="muted">Loading competition…</p>';return}
   if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
   if(fromSnapshot&&document.activeElement&&document.activeElement.id==="j-code")return;/* don't wipe a code being typed */
   renderComp(app,comp);
