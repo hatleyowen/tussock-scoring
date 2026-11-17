@@ -146,6 +146,16 @@ table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13
 .stepper .val .mk.dbl{box-shadow:0 0 0 2px var(--fg),0 0 0 4px var(--surface),0 0 0 6px var(--fg)}
 .stepper .pk{width:auto;font-size:14px;padding:0 10px}
 .res{font-size:12px;color:var(--muted)}
+/* Under-par shouts: floating cards at the top of the page, newest first. */
+.shouts{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));width:calc(100% - 32px);max-width:520px;z-index:30;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.shout{pointer-events:auto;display:flex;align-items:center;gap:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-left:5px solid var(--under);border-radius:8px;padding:10px 8px 10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:shout-in .35s ease-out}
+.shout .w{font-family:var(--f-display);font-weight:700;font-size:26px;line-height:1;color:var(--under);text-transform:uppercase;letter-spacing:.03em;flex:none}
+.shout .d{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.shout .d b{font-weight:600}
+.shout .x{flex:none;width:44px;height:44px;min-height:44px;padding:0;border:none;background:transparent;color:var(--muted);font-size:22px;line-height:1}
+.shout .x:hover{color:var(--fg);background:var(--sunk)}
+@keyframes shout-in{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.shout{animation:none}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px);z-index:20}
 
 /* Setup */
@@ -263,6 +273,7 @@ table.stats{width:100%;border-collapse:collapse}
   </header>
   <main id="app"></main>
 </div>
+<div id="shouts" class="shouts" aria-live="polite"></div>
 <div id="toast" class="toast" hidden role="status"></div>
 
 <script type="module">
@@ -424,6 +435,7 @@ function subscribeEntries(id){
   if(entriesFor===id)return;
   if(entriesUnsub){entriesUnsub();entriesUnsub=null}
   entriesFor=id;
+  subscribeShouts(id);
   if(!S.db||!id||id==="sample")return;
   checkJoined(id);
   entriesUnsub=S.db.collection("comps/"+id+"/players").onSnapshot(snap=>{
@@ -431,6 +443,64 @@ function subscribeEntries(id){
     S.entries[id].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
     S.entriesLoaded[id]=true;render(true);
   },err=>{S.entriesLoaded[id]=true;toast("Scores couldn't load ("+err.code+").");render()});
+}
+/* ---------- under-par shouts ----------
+   When a marker moves off a hole, anyone in their card who scored under par on it gets a shout:
+   comps/{id}/shouts/{entryId}_{hole} = {pid, hole, score, par, at, dismissed}. Everyone viewing the
+   competition sees it as a floating banner for SHOUT_MINUTES; scorers can dismiss it for everyone.
+   The name and score are read from the live entry, so a corrected score drops the banner. */
+const SHOUT_MINUTES=20,SAMPLE_SHOUTS=[];
+let shoutsUnsub=null;S.shouts={};
+function subscribeShouts(id){
+  if(shoutsUnsub){shoutsUnsub();shoutsUnsub=null}
+  renderShouts();
+  if(!S.db||!id||id==="sample")return;
+  shoutsUnsub=S.db.collection("comps/"+id+"/shouts").onSnapshot(snap=>{S.shouts[id]=snap.docs.map(d=>Object.assign({id:d.id},d.data()));renderShouts()},()=>{});
+}
+function shoutTime(s){return s.at&&s.at.toMillis?s.at.toMillis():(s.t||Date.now())}
+function activeShouts(comp){
+  const list=comp.local?SAMPLE_SHOUTS:(S.shouts[comp.id]||[]),entries=curEntries(),now=Date.now();
+  return list.filter(s=>!s.dismissed&&now-shoutTime(s)<SHOUT_MINUTES*60000).map(s=>{
+    const e=entries.find(x=>x.id===s.pid),hole=Number(s.hole),par=comp.course.pars[hole-1],v=e&&scoreAt(e,hole);
+    return e&&typeof v==="number"&&v<par?{s,e,hole,par,v,t:shoutTime(s)}:null;
+  }).filter(Boolean).sort((a,b)=>b.t-a.t).slice(0,3);
+}
+function renderShouts(){
+  const box=$("#shouts");if(!box)return;
+  const comp=S.view==="comp"?curComp():null;
+  if(!comp){box.innerHTML="";box.dataset.html="";return}
+  const can=canScore(comp);
+  const html=activeShouts(comp).map(x=>'<div class="shout" role="status"><span class="w">'+esc(holeWord(x.v,x.par))+'</span><span class="d"><b>'+esc(dispName(x.e,comp))+'</b> made '+x.v+' on hole '+x.hole+' (par '+x.par+')</span>'+(can?'<button class="x" data-shout-x="'+esc(x.s.id)+'" aria-label="Dismiss for everyone" title="Dismiss for everyone">×</button>':'')+'</div>').join("");
+  if(box.dataset.html!==html){box.innerHTML=html;box.dataset.html=html}/* unchanged banners don't re-animate */
+}
+setInterval(renderShouts,60000);/* drops banners once they're SHOUT_MINUTES old */
+function myCard(comp){
+  const entries=curEntries();
+  let g=(LS.get(groupKey(comp))||[]).filter(id=>entries.some(e=>e.id===id));
+  if(comp.local&&!LS.get(groupKey(comp)))g=["s3","s5"];
+  return g.map(id=>entries.find(e=>e.id===id)).filter(Boolean);
+}
+function announceHole(comp,hole){
+  if(!comp||!canScore(comp)||!(hole>=1&&hole<=18))return;
+  const par=comp.course.pars[hole-1];
+  const sentKey="shouted:"+comp.id,sent=LS.get(sentKey)||[];
+  const have=comp.local?SAMPLE_SHOUTS:(S.shouts[comp.id]||[]);
+  myCard(comp).forEach(e=>{
+    const v=scoreAt(e,hole),id=e.id+"_"+hole;
+    if(typeof v!=="number"||v>=par||sent.includes(id)||have.some(s=>s.id===id))return;
+    sent.push(id);
+    const doc={pid:e.id,hole,score:v,par,dismissed:false};
+    if(comp.local)SAMPLE_SHOUTS.push(Object.assign({id,t:Date.now()},doc));
+    else S.db.doc("comps/"+comp.id+"/shouts/"+id).set(Object.assign(doc,{at:S.db.now()})).catch(()=>{});
+  });
+  LS.set(sentKey,sent.slice(-200));
+  renderShouts();
+}
+function dismissShout(comp,id){
+  if(!canScore(comp))return;
+  if(comp.local){const s=SAMPLE_SHOUTS.find(x=>x.id===id);if(s)s.dismissed=true;renderShouts();return}
+  const s=(S.shouts[comp.id]||[]).find(x=>x.id===id);if(s)s.dismissed=true;renderShouts();
+  S.db.doc("comps/"+comp.id+"/shouts/"+id).update({dismissed:true}).catch(err=>{if(s)s.dismissed=false;writeErr(err);renderShouts()});
 }
 function writeErr(err){
   if(err&&err.code==="permission-denied"){toast("That change isn't allowed from this phone. Enter the competition code, or sign in as an organiser.");render();return}
@@ -493,6 +563,8 @@ function route(){
   const h=(location.hash||"").slice(1);
   let m;
   S.confirm=null;
+  /* Leaving Enter scores also counts as moving on from the current hole (e.g. after the 18th). */
+  if(S.view==="comp"&&S.tab==="score"){const pc=curComp();if(pc&&h!=="c-"+pc.id+"-score")announceHole(pc,S.hole)}
   if(h==="new"){S.view="new";S.compId=null}
   else if((m=/^c-([A-Za-z0-9_-]+?)(?:-(board|score|setup|stats))?$/.exec(h))){
     if(S.compId!==m[1]){S.openCard=null;S.editEntry=null;S.hole=(LS.get("hole:"+m[1])||1)}
@@ -506,6 +578,7 @@ function go(h){if(location.hash==="#"+h)route();else location.hash=h}
 
 /* ---------- render ---------- */
 function render(fromSnapshot){
+  renderShouts();
   const conn=$("#conn");
   conn.innerHTML=S.dbState==="live"?'<span class="pill">Live scoring</span>':S.dbState==="offline"?'<span class="pill warn">Not connected</span>':S.dbState==="connecting"?"Connecting…":"";
   const u=S.authUser,authEl=$("#auth");
@@ -672,8 +745,7 @@ function groupKey(comp){return "grp:"+comp.id}
 function renderScore(tab,comp){
   const entries=curEntries();
   if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>Add the field first</h2><p class="muted">Scores are entered per player or team. Add them under Field &amp; course.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Add players</button></div></div>';return}
-  let grp=(LS.get(groupKey(comp))||[]).filter(id=>entries.some(e=>e.id===id));
-  if(comp.local&&!LS.get(groupKey(comp)))grp=["s3","s5"];
+  const grp=myCard(comp).map(e=>e.id);
   const f=FORMATS[comp.format],points=f.scoring==="points";
   const c=comp.course,hole=S.hole,i=hole-1;
   let h='<div class="stack"><div class="panel stack"><div><div class="eyebrow">Your card</div><p class="note" style="margin:2px 0 0">Pick who you\'re marking for, up to four.</p></div><div class="chips">';
@@ -1037,7 +1109,8 @@ document.addEventListener("click",ev=>{
     if(g.includes(id))g=g.filter(x=>x!==id);else{if(g.length>=4){toast("A card holds up to four. Remove someone first.");return}g.push(id)}
     LS.set(groupKey(comp),g);render();return;
   }
-  if(t.dataset.hole&&comp){S.hole=+t.dataset.hole;LS.set("hole:"+comp.id,S.hole);render();return}
+  if(t.dataset.shoutX&&comp){dismissShout(comp,t.dataset.shoutX);return}
+  if(t.dataset.hole&&comp){const was=S.hole;S.hole=+t.dataset.hole;if(was!==S.hole)announceHole(comp,was);LS.set("hole:"+comp.id,S.hole);render();return}
   if((t.dataset.step||t.dataset.pick)&&comp&&canScore(comp)){
     const id=t.dataset.e||t.dataset.pick,e=curEntries().find(x=>x.id===id);if(!e)return;
     const par=comp.course.pars[S.hole-1],cur=scoreAt(e,S.hole);
