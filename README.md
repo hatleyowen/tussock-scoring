@@ -25,6 +25,10 @@ Scores entered without signal are kept on the phone and sent when it reconnects.
 
 A stroke play or Stableford competition can also run a **pairs competition (better-ball Stableford)** off the same scores. Turn it on under *Field & course*, give both partners the same pair name, and the leaderboard gets an **Individual / Pairs** switch. The pairs game has its own handicap allowance (default 85%). Players without a pair name only appear on the individual board.
 
+### Leaderboard freeze
+
+Organisers can freeze the leaderboard after a chosen hole (default 15) under *Field & course → Leaderboard freeze*, so the winner stays a surprise until the prizegiving. While frozen, everyone except organisers sees the leaderboards, scorecards and stats only up to that hole, and no birdie banners are sent for the later holes. Scoring carries on as normal. Organisers see the full results (with a *Preview players' view* switch) and press **Reveal results** at the prizegiving, which updates every screen at once. This is app-only: the scores are still in the public database. Stored on the competition as `freeze: {on, after, revealed}`.
+
 ## Rules implemented
 
 - **Playing handicap (WHS):** `round(index × slope / 113 + (course rating − par))`, then `× allowance` and rounded. Default allowances: 95% individual, 85% better-ball. Plus handicaps give strokes back from stroke index 18 upwards.

@@ -239,6 +239,7 @@ table.stats{width:100%;border-collapse:collapse}
 .stats-box[open]>summary{border-bottom:1px solid var(--line);border-radius:10px 10px 0 0}
 .stats-body{padding:14px 16px 16px}
 .card-box{margin-top:0}
+.freeze-note{margin-bottom:12px}
 /* Room below the scoring panel so it can always scroll up to the top of the screen. */
 .holes-wrap{min-height:calc(100vh - 24px);min-height:calc(100dvh - 24px)}
 @media (prefers-reduced-motion:reduce){.stats-box .chev{transition:none}}
@@ -335,7 +336,16 @@ function holeStrokes(ph,si){
   if(ph>=0)return Math.floor(ph/18)+(si<=ph%18?1:0);
   const n=-ph;return -(Math.floor(n/18)+(si>18-(n%18)?1:0));
 }
-function scoreAt(e,h){const p=pending[e.id];const v=p&&p[h]!==undefined?p[h]:(e.scores||{})[h];return v===undefined?null:v}
+/* ---------- leaderboard freeze ----------
+   comp.freeze = {on, after, revealed}. While on and not revealed, everything leaderboard-like (boards,
+   scorecards, stats, banners) leaves out holes after `after` for everyone except organisers, who see
+   the full results unless they switch on "Preview players' view". Scoring itself is unchanged.
+   App-only: the scores are still in the public database. */
+function freezeAfter(comp){const f=comp&&comp.freeze;return f&&f.on&&!f.revealed?(Number(f.after)||15):0}
+function lateHidden(comp){const n=freezeAfter(comp);return n&&(!canAdmin()||S.freezePreview)?n:0}
+/* Copies of the entries that read as blank after the freeze hole (see scoreAt). */
+function boardView(comp,entries){const n=lateHidden(comp);return n?entries.map(e=>Object.assign({},e,{_upto:n})):entries}
+function scoreAt(e,h){if(e._upto&&h>e._upto)return null;const p=pending[e.id];const v=p&&p[h]!==undefined?p[h]:(e.scores||{})[h];return v===undefined?null:v}
 function evalEntry(e,comp){
   const c=comp.course,ph=playingHcp(e,comp),holes=[];
   let thru=0,gross=0,pts=0,netTP=0,grossTP=0,pickup=false;
@@ -472,7 +482,8 @@ function subscribeShouts(id){
 function shoutTime(s){return s.at&&s.at.toMillis?s.at.toMillis():(s.t||Date.now())}
 function activeShouts(comp){
   const list=comp.local?SAMPLE_SHOUTS:(S.shouts[comp.id]||[]),entries=curEntries(),hidden=hiddenShouts(comp);
-  return list.filter(s=>!hidden.includes(s.id)).map(s=>{
+  const fz=freezeAfter(comp);/* while frozen, nobody (organisers included) gets banners for the hidden holes */
+  return list.filter(s=>!hidden.includes(s.id)&&!(fz&&Number(s.hole)>fz)).map(s=>{
     const e=entries.find(x=>x.id===s.pid),hole=Number(s.hole),par=comp.course.pars[hole-1],v=e&&scoreAt(e,hole);
     return e&&typeof v==="number"&&v<par?{s,e,hole,par,v,t:shoutTime(s)}:null;
   }).filter(Boolean).sort((a,b)=>b.t-a.t).slice(0,3);
@@ -492,6 +503,7 @@ function myCard(comp){
 }
 function announceHole(comp,hole){
   if(!comp||!canScore(comp)||!(hole>=1&&hole<=18))return;
+  const fz=freezeAfter(comp);if(fz&&hole>fz)return;/* frozen holes don't get banners, now or after the reveal */
   const par=comp.course.pars[hole-1];
   const sentKey="shouted:"+comp.id,sent=comp.local?[]:(LS.get(sentKey)||[]);/* the sample's shouts live in memory only */
   const have=comp.local?SAMPLE_SHOUTS:(S.shouts[comp.id]||[]);
@@ -600,7 +612,7 @@ function render(fromSnapshot){
   if(S.view==="new")return fromSnapshot?null:renderCompForm(app,null);
   const comp=curComp();
   if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">All competitions</a></div></div>':'<p class="muted">Loading competition…</p>';return}
-  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
+  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const fb=$("#freezeBox");if(fb&&!(document.activeElement&&document.activeElement.id==="fz-after"))fb.outerHTML=freezePanel(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
   if(fromSnapshot&&document.activeElement&&document.activeElement.id==="j-code")return;/* don't wipe a code being typed */
   renderComp(app,comp);
 }
@@ -645,7 +657,7 @@ function renderComp(app,comp){
 }
 
 function renderBoard(tab,comp){
-  const entries=curEntries();
+  const entries=boardView(comp,curEntries());
   const f=FORMATS[comp.format];
   if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>No one in the field yet</h2><p class="muted">Add players under Field &amp; course, then scores appear here as they come in.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Add players</button></div></div>';return}
   const teams=hasTeams(comp),kind=teams&&S.boardKind==="team"?"team":"ind";
@@ -661,9 +673,11 @@ function renderBoard(tab,comp){
     return;
   }
   const done=rows.filter(r=>r.complete).length,started=rows.filter(r=>r.started).length;
+  const hid=lateHidden(comp);
+  h+=freezeNotice(comp);
   h+='<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row">';
-  h+=started&&done<rows.length?'<span class="pill live">Live</span>':done===rows.length?'<span class="pill">Final</span>':'<span class="pill warn">Not started</span>';
-  h+='<span class="note">'+done+' of '+rows.length+' '+(isPairs?"pairs":comp.format==="scramble"?"teams":"cards")+' complete';
+  h+=hid?'<span class="pill warn">Frozen after hole '+hid+'</span>':started&&done<rows.length?'<span class="pill live">Live</span>':done===rows.length?'<span class="pill">Final</span>':'<span class="pill warn">Not started</span>';
+  h+='<span class="note">'+(hid?'Showing holes 1–'+hid:done+' of '+rows.length+' '+(isPairs?"pairs":comp.format==="scramble"?"teams":"cards")+' complete');
   if(kind==="team"){const unp=entries.filter(e=>!(e.team||"").trim()).length;h+=' · '+teamAllowance(comp)+'% allowance'+(unp?' · '+unp+' player'+(unp===1?'':'s')+' not in a pair':'')}
   h+='</span></div>';
   if(!points)h+='<div class="seg" role="group" aria-label="Leaderboard type"><button aria-pressed="'+(S.boardMode==="net")+'" data-mode="net">Net</button><button aria-pressed="'+(S.boardMode==="gross")+'" data-mode="gross">Gross</button></div>';
@@ -694,9 +708,45 @@ function renderBoard(tab,comp){
   });
   h+='</tbody></table></div>';
   h+='<p class="note" style="margin-top:10px">Tap a row to see the card. '+(points?'Stableford points: 2 for a net par, 1 more per stroke under.':'NR: no return, the player picked up on a hole.')+' Ties on completed cards go to countback over the last 9, 6, 3 and 1 holes'+(points?'':(mode==="net"?', using ½, ⅓, ⅙ and 1/18 of the handicap':''))+'.</p>';
-  h+=statsSection(comp);
+  h+=statsSection(comp,entries);
   tab.innerHTML=h;
   const sb=$("#statsBox");if(sb)sb.ontoggle=()=>{S.statsOpen=sb.open};
+}
+/* Leaderboard notice while frozen: players get the "wait for the prizegiving" message; organisers get
+   what players see, a preview switch and the Reveal button. */
+function freezeNotice(comp){
+  const n=freezeAfter(comp);if(!n)return "";
+  if(!canAdmin())return '<div class="banner freeze-note"><b>Leaderboard frozen after hole '+n+'.</b> Scores for holes '+(n+1)+'–18 are still being entered. Final results will be revealed at the prizegiving.</div>';
+  return '<div class="banner freeze-note stack" style="gap:8px"><div><b>Frozen for players after hole '+n+'.</b> '+(S.freezePreview?'You\'re previewing what players see.':'As an organiser you\'re seeing the full results; players only see holes 1–'+n+'.')+'</div><div class="row"><button type="button" data-freeze="preview" aria-pressed="'+!!S.freezePreview+'">'+(S.freezePreview?"Show full results":"Preview players' view")+'</button>'+revealBtn()+'</div></div>';
+}
+function revealBtn(){const c=S.confirm==="reveal";return '<button type="button" class="'+(c?"danger":"primary")+'" data-freeze="reveal">'+(c?"Confirm: reveal to everyone":"Reveal results")+'</button>'}
+/* Organiser panel on Field & course. Changes save straight away. */
+function freezePanel(comp){
+  const f=comp.freeze||{},n=Number(f.after)||15;
+  let h='<div class="panel stack" id="freezeBox"><div><h2>Leaderboard freeze</h2><p class="note" style="margin:4px 0 0">Keep the result a surprise: players and spectators see the leaderboard, scorecards, stats and birdie banners only up to the hole you choose. Scoring carries on as normal and organisers still see everything. Press <b>Reveal results</b> at the prizegiving and every screen updates at once. Changes here save straight away.</p></div>';
+  const hole='<label class="f" style="max-width:180px">Freeze after hole<input id="fz-after" inputmode="numeric" value="'+n+'"></label>';
+  if(!f.on)h+='<div class="row" style="align-items:flex-end">'+hole+'<button type="button" class="primary" data-freeze="on">Freeze leaderboard</button></div>';
+  else if(!f.revealed)h+='<div><span class="pill warn">Frozen after hole '+n+'</span></div><div class="row" style="align-items:flex-end">'+hole+'<button type="button" data-freeze="hole">Change hole</button></div><div class="row">'+revealBtn()+'<button type="button" class="ghost" data-freeze="off">Turn off freeze</button></div>';
+  else h+='<div><span class="pill">Results revealed</span></div><p class="note" style="margin:0">Everyone can see all 18 holes.</p><div class="row" style="align-items:flex-end">'+hole+'<button type="button" data-freeze="on">Freeze again</button></div>';
+  h+='<span class="err" id="fzErr" role="alert"></span></div>';
+  return h;
+}
+async function setFreeze(comp,freeze){
+  if(comp.local){SAMPLE.freeze=freeze;render();return}
+  try{await S.db.doc("comps/"+comp.id).update({freeze})}catch(err){writeErr(err)}
+}
+function freezeAction(comp,act){
+  const f=comp.freeze||{},inp=$("#fz-after"),after=inp?parseInt(inp.value):(Number(f.after)||15);
+  const bad=()=>{const e=$("#fzErr");if(e)e.textContent="Pick a hole from 1 to 17."};
+  if(act==="preview"){S.freezePreview=!S.freezePreview;render();return}
+  if(act==="reveal"){
+    if(S.confirm!=="reveal"){S.confirm="reveal";render();setTimeout(()=>{if(S.confirm==="reveal"){S.confirm=null;render()}},5000);return}
+    S.confirm=null;S.freezePreview=false;setFreeze(comp,{on:true,after:Number(f.after)||15,revealed:true});toast("Results revealed to everyone.");return;
+  }
+  if(act==="off"){S.freezePreview=false;setFreeze(comp,{on:false,after:Number(f.after)||15,revealed:false});return}
+  if(!(after>=1&&after<=17))return bad();
+  if(act==="on")setFreeze(comp,{on:true,after,revealed:false}).then(()=>toast("Leaderboard frozen after hole "+after+"."));
+  if(act==="hole")setFreeze(comp,{on:true,after,revealed:false}).then(()=>toast("Now frozen after hole "+after+"."));
 }
 function cardHtml(comp,r,points){
   const c=comp.course;
@@ -728,8 +778,7 @@ function statType(g,par){
   return d<=-2?"eagle":d===-1?"birdie":d===0?"par":d===1?"bogey":d===2?"dbl":"worse";
 }
 /* Collapsible Stats section shown under the leaderboard. Closed by default; stays open across live updates. */
-function statsSection(comp){
-  const entries=curEntries();
+function statsSection(comp,entries){
   if(!entries.length)return "";
   const rows=entries.map(e=>{
     const n={eagle:0,birdie:0,par:0,bogey:0,dbl:0,worse:0};let played=0;
@@ -762,7 +811,8 @@ function fieldGroups(entries){
   return [...m].sort((a,b)=>(a[0]===NO_GROUP)-(b[0]===NO_GROUP)||a[0].localeCompare(b[0],undefined,{numeric:true,sensitivity:"base"}));
 }
 function renderScore(tab,comp){
-  const entries=curEntries();
+  /* Markers see every hole they're scoring; people who can't score don't see past the freeze here either. */
+  const entries=canScore(comp)?curEntries():boardView(comp,curEntries());
   if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>Add the field first</h2><p class="muted">Scores are entered per player or team. Add them under Field &amp; course.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Add players</button></div></div>';return}
   const grp=myCard(comp).map(e=>e.id);
   const f=FORMATS[comp.format],points=f.scoring==="points";
@@ -838,6 +888,7 @@ function renderSetup(tab,comp){
   }
   h+='</div>';
   if(canAdmin()){
+    h+=freezePanel(comp);
     h+='<div class="panel stack"><h2>Competition &amp; course</h2><div id="cform-host"></div></div>';
   }else h+=courseView(comp);
   h+='</div>';
@@ -1159,6 +1210,7 @@ document.addEventListener("click",ev=>{
     else render();
     return;
   }
+  if(t.dataset.freeze&&comp&&canAdmin()){freezeAction(comp,t.dataset.freeze);return}
   if(t.dataset.shoutX&&comp){dismissShout(comp,t.dataset.shoutX);return}
   if(t.dataset.hole&&comp){const was=S.hole;S.hole=+t.dataset.hole;if(was!==S.hole)announceHole(comp,was);LS.set("hole:"+comp.id,S.hole);render();return}
   if((t.dataset.step||t.dataset.pick)&&comp&&canScore(comp)){
