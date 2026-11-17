@@ -122,6 +122,12 @@ table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13
 /* Score entry */
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{border-radius:99px;min-height:36px;padding:4px 14px;font-weight:500}
+.cgroups{display:flex;flex-direction:column;gap:12px}
+.cgroup{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid var(--line)}
+.cgroup:first-child{border-top:none;padding-top:0}
+.cgroup-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px}
+.cgroup-head .sm{min-height:32px;padding:2px 10px;font-size:13px}
+.cgroup-head .sm[aria-pressed="true"]{color:var(--accent);font-weight:600}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .holes{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
 .holes button{min-height:38px;padding:0;font-family:var(--f-display);font-size:18px;position:relative}
@@ -743,15 +749,34 @@ function statsSection(comp){
 }
 
 function groupKey(comp){return "grp:"+comp.id}
+/* The field split by 4-ball group ("Group 1", "Group 2"... in natural order), with anyone not in a
+   group last. Null when nobody is in a group. */
+const NO_GROUP="Not in a group";
+function fieldGroups(entries){
+  if(!entries.some(e=>(e.group||"").trim()))return null;
+  const m=new Map();
+  entries.forEach(e=>{const g=(e.group||"").trim()||NO_GROUP;if(!m.has(g))m.set(g,[]);m.get(g).push(e)});
+  return [...m].sort((a,b)=>(a[0]===NO_GROUP)-(b[0]===NO_GROUP)||a[0].localeCompare(b[0],undefined,{numeric:true,sensitivity:"base"}));
+}
 function renderScore(tab,comp){
   const entries=curEntries();
   if(!entries.length){tab.innerHTML='<div class="panel empty stack"><h2>Add the field first</h2><p class="muted">Scores are entered per player or team. Add them under Field &amp; course.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Add players</button></div></div>';return}
   const grp=myCard(comp).map(e=>e.id);
   const f=FORMATS[comp.format],points=f.scoring==="points";
   const c=comp.course,hole=S.hole,i=hole-1;
-  let h='<div class="stack"><div class="panel stack"><div><div class="eyebrow">Your card</div><p class="note" style="margin:2px 0 0">Pick who you\'re marking for, up to four.</p></div><div class="chips">';
-  entries.forEach(e=>{h+='<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(dispName(e,comp))+'</button>'});
-  h+='</div></div>';
+  const chip=e=>'<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(dispName(e,comp))+'</button>';
+  const groups=fieldGroups(entries);
+  let h='<div class="stack"><div class="panel stack"><div><div class="eyebrow">Your card</div><p class="note" style="margin:2px 0 0">Pick who you\'re marking for, up to four.'+(groups?' Players are listed in their groups; tap <b>Mark this group</b> to pick a whole group.':'')+'</p></div>';
+  if(!groups)h+='<div class="chips">'+entries.map(chip).join("")+'</div>';
+  else{
+    h+='<div class="cgroups">';
+    groups.forEach(([name,es])=>{
+      const all=es.length<=4&&es.length===grp.length&&es.every(e=>grp.includes(e.id));
+      h+='<div class="cgroup" role="group" aria-label="'+esc(name)+'"><div class="cgroup-head"><span class="eyebrow">'+esc(name)+'</span>'+(name!==NO_GROUP&&es.length<=4?'<button class="ghost sm" data-grp-all="'+esc(name)+'" aria-pressed="'+all+'">'+(all?"Marking this group":"Mark this group")+'</button>':'')+'</div><div class="chips">'+es.map(chip).join("")+'</div></div>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
   if(!canScore(comp)){
     h+='<div class="panel stack"><div><div class="eyebrow">Unlock scoring</div><h3>Enter the competition code</h3><p class="note" style="margin:2px 0 0">Ask the organiser for the code. You only need to enter it once on this phone.</p></div>';
     if(!S.db)h+='<p class="note" style="margin:0">Scoring needs a connection. Check your signal and reload.</p>';
@@ -1104,6 +1129,10 @@ document.addEventListener("click",ev=>{
   if(t.dataset.mode){S.boardMode=t.dataset.mode;render();return}
   if(t.dataset.kind){S.boardKind=t.dataset.kind;S.openCard=null;LS.set("kind",S.boardKind);render();return}
   if(t.dataset.card){S.openCard=S.openCard===t.dataset.card?null:t.dataset.card;render();return}
+  if(t.dataset.grpAll&&comp){
+    const ids=curEntries().filter(e=>(e.group||"").trim()===t.dataset.grpAll).map(e=>e.id).slice(0,4);
+    LS.set(groupKey(comp),ids);render();return;
+  }
   if(t.dataset.grp&&comp){
     const entries=curEntries();let g=(LS.get(groupKey(comp))||(comp.local?["s3","s5"]:[])).filter(id=>entries.some(e=>e.id===id));
     const id=t.dataset.grp;
