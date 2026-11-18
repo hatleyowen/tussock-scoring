@@ -644,7 +644,7 @@ function renderComp(app,comp){
   const f=FORMATS[comp.format]||FORMATS.stroke;
   let h='';
   if(comp.local)h+='<div class="banner sample" style="margin-top:6px">Sample competition. Scores you enter here stay on this screen only.</div>';
-  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(comp.format!=="scramble"?' · '+esc(comp.allowance)+'% allowance':'')+(hasTeams(comp)?' · Pairs better-ball at '+teamAllowance(comp)+'%':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(codeOf(comp)?'<span class="code" title="Competition code">'+esc(codeOf(comp))+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
+  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(hasTeams(comp)?' · Pairs better-ball':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(codeOf(comp)?'<span class="code" title="Competition code">'+esc(codeOf(comp))+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
   h+='<div class="tabs" role="tablist">';
   [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
   h+='</div><div id="tab"></div>';
@@ -678,7 +678,7 @@ function renderBoard(tab,comp){
   h+='<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row">';
   h+=hid?'<span class="pill warn">Frozen after hole '+hid+'</span>':started&&done<rows.length?'<span class="pill live">Live</span>':done===rows.length?'<span class="pill">Final</span>':'<span class="pill warn">Not started</span>';
   h+='<span class="note">'+(hid?'Showing holes 1–'+hid:done+' of '+rows.length+' '+(isPairs?"pairs":comp.format==="scramble"?"teams":"cards")+' complete');
-  if(kind==="team"){const unp=entries.filter(e=>!(e.team||"").trim()).length;h+=' · '+teamAllowance(comp)+'% allowance'+(unp?' · '+unp+' player'+(unp===1?'':'s')+' not in a pair':'')}
+  if(kind==="team"){const unp=entries.filter(e=>!(e.team||"").trim()).length;h+=(unp?' · '+unp+' player'+(unp===1?'':'s')+' not in a pair':'')}
   h+='</span></div>';
   if(!points)h+='<div class="seg" role="group" aria-label="Leaderboard type"><button aria-pressed="'+(S.boardMode==="net")+'" data-mode="net">Net</button><button aria-pressed="'+(S.boardMode==="gross")+'" data-mode="gross">Gross</button></div>';
   h+='</div><div class="board-wrap"><table class="board"><thead><tr><th>Pos</th><th>'+(isPairs?"Pair":comp.format==="scramble"?"Team":"Player")+'</th><th>Thru</th><th class="c-wide">'+(comp.format==="scramble"?"Team hcp":"HCP")+'</th>';
