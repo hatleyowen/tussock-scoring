@@ -362,20 +362,26 @@ function evalEntry(e,comp){
   return {key:e.id,name:dispName(e,comp),sub:dispMembers(e.members,comp),e,ph,phLabel:String(ph),holes,thru,gross,pts,netTP,grossTP,pickup,complete:thru===18};
 }
 function hasTeams(comp){return !!(comp.teams&&comp.teams.enabled)&&(comp.format==="stroke"||comp.format==="stableford")}
-function teamAllowance(comp){const a=Number(comp.teams&&comp.teams.allowance);return a>0?a:85}
+/* Pairs side game: "best" = better-ball (the better points score on each hole counts), "combined" = both partners' points added. */
+function teamMode(comp){return comp.teams&&comp.teams.mode==="combined"?"combined":"best"}
+function teamLabel(comp){return teamMode(comp)==="combined"?"Combined Stableford":"Better-ball Stableford"}
+const TEAM_DEFAULT_ALLOW={best:85,combined:95};
+function teamAllowance(comp){const a=Number(comp.teams&&comp.teams.allowance);return a>0?a:TEAM_DEFAULT_ALLOW[teamMode(comp)]}
 function teamRows(comp,entries,sideGame){
   const groups=new Map();
   const tc=sideGame?Object.assign({},comp,{allowance:teamAllowance(comp)}):comp;
   entries.forEach(e=>{const t=(e.team||"").trim();if(!t&&sideGame)return;const k=t||("Unpaired: "+dispName(e,comp));if(!groups.has(k))groups.set(k,[]);groups.get(k).push(evalEntry(e,tc))});
+  const combined=sideGame&&teamMode(comp)==="combined";
   return [...groups].map(([name,evs])=>{
     const holes=[];let thru=0,pts=0;
     for(let i=0;i<18;i++){
       const vals=evs.map(v=>v.holes[i].pts).filter(x=>x!=null);
-      const best=vals.length?Math.max(...vals):null;
-      holes.push({par:comp.course.pars[i],si:comp.course.si[i],pts:best});
-      if(best!=null){thru++;pts+=best}
+      /* Combined: the hole's points so far are shown, but it only counts as played once both partners have a score. */
+      const hp=!vals.length?null:combined?sum(vals):Math.max(...vals);
+      holes.push({par:comp.course.pars[i],si:comp.course.si[i],pts:hp});
+      if(hp!=null){pts+=hp;if(!combined||vals.length===evs.length)thru++}
     }
-    return {key:"t:"+name,name,sub:evs.map(v=>v.name).join(" & "),phLabel:evs.map(v=>v.ph).join(" · "),members:evs,holes,thru,pts,pickup:false,complete:thru===18,team:true};
+    return {key:"t:"+name,name,sub:evs.map(v=>v.name).join(" & "),phLabel:evs.map(v=>v.ph).join(" · "),members:evs,holes,thru,pts,pickup:false,complete:thru===18,team:true,combined};
   });
 }
 function segs(r,mode){
@@ -647,7 +653,7 @@ function renderComp(app,comp){
   const f=FORMATS[comp.format]||FORMATS.stroke;
   let h='';
   if(comp.local)h+='<div class="banner sample" style="margin-top:6px">Sample competition. Scores you enter here stay on this screen only.</div>';
-  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(hasTeams(comp)?' · Pairs better-ball':'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(codeOf(comp)?'<span class="code" title="Competition code">'+esc(codeOf(comp))+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
+  h+='<div class="comp-head"><div><div class="eyebrow">'+esc(fmtDate(comp.date))+' · '+esc(f.label)+(hasTeams(comp)?' · Pairs '+(teamMode(comp)==="combined"?"combined":"better-ball"):'')+'</div><h1>'+esc(comp.name)+'</h1><div class="muted">'+(codeOf(comp)?'<span class="code" title="Competition code">'+esc(codeOf(comp))+'</span> · ':'')+esc(comp.course.name||"")+' · Par '+coursePar(comp.course)+(comp.format!=="scramble"?' · CR '+esc(comp.course.rating)+' / Slope '+esc(comp.course.slope):'')+'</div></div><a class="btn ghost" href="#home">All competitions</a></div>';
   h+='<div class="tabs" role="tablist">';
   [["board","Leaderboard"],["score","Enter scores"],["setup","Field & course"]].forEach(([k,l])=>{h+='<button role="tab" aria-selected="'+(S.tab===k)+'" data-go="c-'+esc(comp.id)+'-'+k+'">'+l+'</button>'});
   h+='</div><div id="tab"></div>';
@@ -669,7 +675,7 @@ function renderBoard(tab,comp){
   const {rows,points}=buildBoard(comp,entries,mode,kind);
   let h='';
   if(teams){
-    h+='<div class="seg kind" role="group" aria-label="Competition" style="margin-bottom:14px"><button aria-pressed="'+(kind==="ind")+'" data-kind="ind">Individual<span class="lg">&nbsp;· '+esc(f.label)+'</span></button><button aria-pressed="'+(kind==="team")+'" data-kind="team">Pairs<span class="lg">&nbsp;· Better-ball Stableford</span></button></div>';
+    h+='<div class="seg kind" role="group" aria-label="Competition" style="margin-bottom:14px"><button aria-pressed="'+(kind==="ind")+'" data-kind="ind">Individual<span class="lg">&nbsp;· '+esc(f.label)+'</span></button><button aria-pressed="'+(kind==="team")+'" data-kind="team">Pairs<span class="lg">&nbsp;· '+teamLabel(comp)+'</span></button></div>';
   }
   if(kind==="team"&&!rows.length){
     tab.innerHTML=h+'<div class="panel empty stack"><h2>No pairs yet</h2><p class="muted" style="max-width:60ch">Give both partners the same pair name under Field &amp; course. Their individual scores feed this leaderboard automatically, off '+teamAllowance(comp)+'% of handicap.</p><div><button data-go="c-'+esc(comp.id)+'-setup">Set up pairs</button></div></div>';
@@ -766,7 +772,7 @@ function cardHtml(comp,r,points){
     h+=rowOf(r.team?esc(String(L.name).slice(0,12)):"Score",i=>mark(L.holes[i].g,c.pars[i])+(L.holes[i].rec>0?'<div class="dots">'+"•".repeat(L.holes[i].rec)+'</div>':""),(a,b)=>{if(hasP&&b-a===18)return"NR";let t=0,any=false;for(let i=a;i<b;i++){if(typeof L.holes[i].g==="number"){t+=L.holes[i].g;any=true}}return any?t:""});
     if(points)h+=rowOf("Pts",i=>L.holes[i].pts==null?"":L.holes[i].pts,(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=L.holes[i].pts||0;return t});
   });
-  if(r.team)h+=rowOf("Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
+  if(r.team)h+=rowOf(r.combined?"Pair":"Best",i=>r.holes[i].pts==null?"":'<b>'+r.holes[i].pts+'</b>',(a,b)=>{let t=0;for(let i=a;i<b;i++)t+=r.holes[i].pts||0;return '<b>'+t+'</b>'});
   h+='</tbody></table></div>';
   return h;
 }
@@ -1096,12 +1102,12 @@ function compForm(host,comp){
   h+='<label class="f">Format<select id="f-format">'+Object.entries(FORMATS).map(([k,v])=>'<option value="'+k+'"'+(k===fmt?" selected":"")+'>'+v.label+'</option>').join("")+'</select></label>';
   h+='<label class="f" id="allowWrap">Handicap allowance %<input id="f-allow" inputmode="numeric" value="'+esc(comp?comp.allowance:FORMATS[fmt].allowance)+'"></label>';
   h+='</div><p class="note" id="codeHelp" style="margin:0">Code: letters and numbers only, up to 12 characters, different from every other competition.</p><p class="note" id="fmtBlurb" style="margin:0"></p>';
-  const tOn=!!(comp&&comp.teams&&comp.teams.enabled),tAl=comp?teamAllowance(comp):85;
-  h+='<div id="teamWrap" class="banner stack" style="gap:10px"><label class="row" id="teamChkWrap" style="gap:10px;font-weight:600;cursor:pointer"><input type="checkbox" id="f-teams" style="width:20px;min-height:20px;margin:0"'+(tOn?" checked":"")+'> Also run a pairs competition (better-ball Stableford)</label>';
-  h+='<p class="note" id="teamNote" style="margin:0">Same scores, second leaderboard. Partners share a pair name, and the better Stableford score of the two counts on each hole.</p>';
+  const tOn=!!(comp&&comp.teams&&comp.teams.enabled),tMode=comp?teamMode(comp):"best",tAl=comp?teamAllowance(comp):85;
+  h+='<div id="teamWrap" class="banner stack" style="gap:10px"><label class="row" id="teamChkWrap" style="gap:10px;font-weight:600;cursor:pointer"><input type="checkbox" id="f-teams" style="width:20px;min-height:20px;margin:0"'+(tOn?" checked":"")+'> Also run a pairs competition (Stableford)</label>';
+  h+='<p class="note" id="teamNote" style="margin:0"></p>';
   /* Random pair tools (existing competitions only). Their buttons are type="button" so they never submit this form. */
   if(comp)h+='<div id="pairTools" class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:10px"><h3>Pairs</h3><p class="note" style="margin:0">Random pairs split the field in half by handicap index. Each player in the lower half is drawn a random partner from the higher half, and both get the same pair name. With an odd number of players, one is left without a partner. Pairs are saved straight away; you don\'t need to press Save changes.</p><div class="row"><button type="button" id="pGen">Generate random pairs</button><button type="button" class="danger" id="pClear">Clear all pairs</button></div><div id="pConfirm" class="stack" style="gap:10px;border:1px solid var(--under);border-radius:10px;padding:12px 14px;background:var(--surface)" role="alertdialog" aria-labelledby="pConfirmText" hidden><p id="pConfirmText" style="margin:0;font-weight:600">Are you sure? This will remove all Team pairing for the competition.</p><div class="row"><button type="button" class="danger" id="pYes">Yes, clear all pairs</button><button type="button" id="pNo">Cancel</button></div></div><span class="note" id="pMsg" role="status"></span></div>';
-  h+='<label class="f" id="tAllowWrap" style="max-width:220px">Pairs handicap allowance %<input id="f-tallow" inputmode="numeric" value="'+esc(tAl)+'"></label></div>';
+  h+='<div class="row" id="tAllowWrap" style="align-items:flex-end"><label class="f" style="max-width:240px">Pairs format<select id="f-tmode"><option value="best"'+(tMode==="best"?" selected":"")+'>Better-ball Stableford</option><option value="combined"'+(tMode==="combined"?" selected":"")+'>Combined Stableford</option></select></label><label class="f" style="max-width:220px">Pairs handicap allowance %<input id="f-tallow" inputmode="numeric" value="'+esc(tAl)+'"></label></div></div>';
   /* 4-ball groups: two pairs per group, so partners always play together (existing competitions only). */
   if(comp)h+='<div id="groupTools" class="banner stack" style="gap:8px"><h3>Groups (4-balls)</h3><p class="note" style="margin:0">Puts two pairs together at random to make each 4-ball, so partners always play together. With an odd number of pairs, one pair plays as a 2-ball. Players without a pair aren\'t grouped. Groups are saved straight away; you don\'t need to press Save changes.</p><div class="row"><button type="button" id="gGen">Create 4-balls</button><button type="button" class="danger" id="gClear">Clear all groups</button></div><div id="gConfirm" class="stack" style="gap:10px;border:1px solid var(--under);border-radius:10px;padding:12px 14px;background:var(--surface)" role="alertdialog" aria-labelledby="gConfirmText" hidden><p id="gConfirmText" style="margin:0;font-weight:600">Are you sure? This will remove all groupings for the competition.</p><div class="row"><button type="button" class="danger" id="gYes">Yes, clear all groups</button><button type="button" id="gNo">Cancel</button></div></div><span class="note" id="gMsg" role="status"></span></div>';
   h+='<div class="grid"><label class="f">Course and tees<input id="f-course" value="'+esc(c.name)+'" placeholder="e.g. Old Course, yellow tees" autocomplete="off"></label>';
@@ -1124,12 +1130,15 @@ function compForm(host,comp){
     $("#teamWrap").hidden=!(k==="stroke"||k==="stableford"||(bb&&pt));
     $("#teamChkWrap").hidden=$("#teamNote").hidden=bb;
     $("#tAllowWrap").hidden=bb||!on;
+    $("#teamNote").textContent="Same scores, second leaderboard. Partners share a pair name, and "+($("#f-tmode").value==="combined"?"both partners' Stableford points are added together on each hole.":"the better Stableford score of the two counts on each hole.");
     if(pt)pt.hidden=!(bb||on);
     const gt=$("#groupTools");if(gt)gt.hidden=!(bb||((k==="stroke"||k==="stableford")&&on));let t=0;for(let i=1;i<=18;i++)t+=parseInt($("#par-"+i).value)||0;$("#parTot").textContent=t};
   upd();
   $("#f-format").onchange=()=>{$("#f-allow").value=FORMATS[$("#f-format").value].allowance;upd()};
   host.querySelectorAll('[id^="par-"]').forEach(x=>x.oninput=upd);
   $("#f-teams").onchange=upd;
+  /* Switching pairs format moves the allowance to that format's usual figure, unless it's been set to something else. */
+  $("#f-tmode").onchange=()=>{const a=$("#f-tallow"),m=$("#f-tmode").value,o=m==="combined"?"best":"combined";if(parseFloat(a.value)===TEAM_DEFAULT_ALLOW[o])a.value=TEAM_DEFAULT_ALLOW[m];upd()};
   const del=$("#cDel");
   if(del)del.onclick=async()=>{
     if(S.confirm!=="comp"){S.confirm="comp";compForm(host,comp);setTimeout(()=>{if(S.confirm==="comp"){S.confirm=null;if(document.body.contains(host))compForm(host,comp)}},5000);return}
@@ -1166,7 +1175,7 @@ function compForm(host,comp){
     const tallow=parseFloat($("#f-tallow").value);
     if(teamsOn&&!(tallow>0&&tallow<=100))return err("Pairs allowance must be between 1 and 100%.");
     /* The code is kept out of the public competition document, in /secrets, which only organisers can read. */
-    const data={name,date:$("#f-date").value,format,allowance,teams:{enabled:teamsOn,allowance:teamsOn?tallow:85},course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
+    const data={name,date:$("#f-date").value,format,allowance,teams:{enabled:teamsOn,allowance:teamsOn?tallow:85,mode:$("#f-tmode").value==="combined"?"combined":"best"},course:{name:$("#f-course").value.trim(),rating,slope,pars,si}};
     if(comp&&comp.local){Object.assign(SAMPLE,data,{code});toast("Sample updated on this screen.");render();return}
     $("#cSubmit").disabled=true;
     try{
