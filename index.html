@@ -153,7 +153,7 @@ table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13
 .stepper .val .mk.birdie{box-shadow:0 0 0 2px var(--under)}
 .stepper .val .mk.bogey{box-shadow:0 0 0 2px var(--fg)}
 .stepper .val .mk.dbl{box-shadow:0 0 0 2px var(--fg),0 0 0 4px var(--surface),0 0 0 6px var(--fg)}
-.stepper .pk{width:auto;font-size:14px;padding:0 10px}
+.stepper .pk{font-size:16px;padding:0}
 .res{font-size:12px;color:var(--muted)}
 /* Under-par shouts: floating cards at the top of the page, newest first. */
 .shouts{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));width:calc(100% - 32px);max-width:520px;z-index:30;display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -856,9 +856,9 @@ function renderScore(tab,comp){
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
       h+='<div class="prow"><div class="who"><div class="n">'+esc(dispName(e,comp))+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
       const dis=canScore(comp)?"":" disabled";
-      h+='<div class="ctl"><div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(dispName(e,comp))+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(dispName(e,comp))+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(dispName(e,comp))+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div>'+ptsLine(ev,H,comp)+'</div></div>';
+      h+='<div class="ctl"><div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(dispName(e,comp))+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(dispName(e,comp))+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(dispName(e,comp))+'"'+dis+'>'+(v==null?"P":"C")+'</button></div>'+ptsLine(ev,H,comp)+'</div></div>';
     });
-    h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div></div>';
+    h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play. C clears a score.</p></div></div>';
   }
   h+='</div>';
   tab.innerHTML=h;
