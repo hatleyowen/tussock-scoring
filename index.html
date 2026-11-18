@@ -141,6 +141,9 @@ table.sc{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13
 .prow .who{min-width:0}
 .prow .who .n{font-weight:600;overflow-wrap:anywhere;font-size:19px;line-height:1.25}
 .prow .who .dots{font-size:20px;letter-spacing:2px;vertical-align:middle}
+.prow:has(.pts){padding-block:9px}
+.prow .pts{font-size:13px;line-height:1.2;color:var(--muted);margin-top:3px;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.prow .pts b{color:var(--fg)}
 .stepper{display:flex;align-items:center;gap:6px}
 .stepper button{width:48px;height:48px;font-size:24px;padding:0}
 .stepper .val{width:56px;text-align:center;font-family:var(--f-display);font-weight:700;font-size:36px;line-height:1}
@@ -810,6 +813,13 @@ function fieldGroups(entries){
   entries.forEach(e=>{const g=(e.group||"").trim()||NO_GROUP;if(!m.has(g))m.set(g,[]);m.get(g).push(e)});
   return [...m].sort((a,b)=>(a[0]===NO_GROUP)-(b[0]===NO_GROUP)||a[0].localeCompare(b[0],undefined,{numeric:true,sensitivity:"base"}));
 }
+/* Stableford points under each name on Enter scores: this hole's points (bold) and the running total.
+   Same handicap and allowance as the leaderboard's individual Pts. Not for team scramble. */
+function ptsLine(ev,H,comp){
+  if(comp.format==="scramble"||!ev.thru)return "";
+  const p=n=>n+' pt'+(n===1?'':'s');
+  return '<div class="pts">'+(H.pts!=null?'This hole <b>'+p(H.pts)+'</b> · ':'')+'Total <b>'+p(ev.pts)+'</b></div>';
+}
 function renderScore(tab,comp){
   /* Markers see every hole they're scoring; people who can't score don't see past the freeze here either. */
   const entries=canScore(comp)?curEntries():boardView(comp,curEntries());
@@ -846,7 +856,7 @@ function renderScore(tab,comp){
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
       h+='<div class="prow"><div class="who"><div class="n">'+esc(dispName(e,comp))+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
       const dis=canScore(comp)?"":" disabled";
-      h+='<div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(dispName(e,comp))+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(dispName(e,comp))+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(dispName(e,comp))+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div></div>';
+      h+='<div class="ctl"><div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(dispName(e,comp))+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(dispName(e,comp))+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="'+(v==="P"?"Clear score":"Picked up")+' for '+esc(dispName(e,comp))+'"'+dis+'>'+(v==null?"P":"Clear")+'</button></div>'+ptsLine(ev,H,comp)+'</div></div>';
     });
     h+='<p class="note" style="margin:0">The first tap of + enters par. P marks a pickup: 0 points in Stableford, no return in stroke play.</p></div></div>';
   }
