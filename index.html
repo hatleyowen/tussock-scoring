@@ -561,7 +561,7 @@ function canScore(comp){if(!comp)return false;if(comp.local)return true;return !
    "First L." and NZ Golf numbers are hidden. Team names in a scramble are left as they are. */
 function canSeeDetails(comp){return !!comp&&(comp.local||canScore(comp))}
 function shortName(n){const p=String(n||"").trim().split(/\s+/).filter(Boolean);return p.length<2?(p[0]||""):p[0]+" "+p[p.length-1].charAt(0).toUpperCase()+"."}
-/* Enter scores uses "First L." to save space (team names in a scramble are left whole). */
+/* The score rows on Enter scores use "First L." to save space (team names in a scramble are left whole). */
 function scoreName(e,comp){return comp&&comp.format==="scramble"?e.name:shortName(e.name)}
 function dispName(e,comp){return comp&&comp.format!=="scramble"&&!canSeeDetails(comp)?shortName(e.name):e.name}
 function dispMembers(s,comp){return !s||canSeeDetails(comp)?(s||""):String(s).split(",").map(shortName).filter(Boolean).join(", ")}
@@ -835,9 +835,9 @@ function renderScore(tab,comp){
   const grp=myCard(comp).map(e=>e.id);
   const f=FORMATS[comp.format],points=f.scoring==="points";
   const c=comp.course,hole=S.hole,i=hole-1;
-  const chip=e=>'<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(scoreName(e,comp))+'</button>';
+  const chip=e=>'<button class="chip" aria-pressed="'+grp.includes(e.id)+'" data-grp="'+esc(e.id)+'">'+esc(dispName(e,comp))+'</button>';
   const groups=fieldGroups(entries);
-  const picked=grp.map(id=>entries.find(e=>e.id===id)).filter(Boolean).map(e=>scoreName(e,comp));
+  const picked=grp.map(id=>entries.find(e=>e.id===id)).filter(Boolean).map(e=>dispName(e,comp));
   let h='<div class="stack"><details class="stats-box card-box" id="cardBox"'+(S.cardOpen!==false?' open':'')+'><summary><span class="sum-t">Your card</span><span class="sum-d">'+(picked.length?esc(picked.join(", ")):'Pick who you\'re marking for')+'</span><svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="stack stats-body"><p class="note" style="margin:0">Pick who you\'re marking for, up to four.'+(groups?' Players are listed in their groups; tap <b>Mark this group</b> to pick a whole group.':'')+'</p>';
   if(!groups)h+='<div class="chips">'+entries.map(chip).join("")+'</div>';
   else{
