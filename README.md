@@ -34,7 +34,7 @@ Organisers can freeze the leaderboard after a chosen hole (default 15) under *Fi
 
 ## Rules implemented
 
-- **Playing handicap (WHS):** `round(index × slope / 113 + (course rating − par))`, then `× allowance` and rounded. Default allowances: 95% individual, 85% better-ball, 95% combined Stableford pairs. Plus handicaps give strokes back from stroke index 18 upwards.
+- **Playing handicap (WHS):** `round((index × slope / 113 + (course rating − par)) × allowance)`. The allowance is applied to the unrounded course handicap and the result is rounded once, as in the 2024 WHS rules and Golf NZ. Default allowances: 95% individual, 85% better-ball, 95% combined Stableford pairs. Plus handicaps give strokes back from stroke index 18 upwards.
 - **Strokes per hole** are allocated by stroke index (SI 1 first; handicaps over 18 get a second stroke).
 - **Pickups:** 0 points in Stableford, NR (no return) in stroke play.
 - **Countback** on completed cards: last 9, 6, 3, then 1 hole. In net stroke play this uses ½, ⅓, ⅙ and 1/18 of the handicap.

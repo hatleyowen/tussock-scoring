@@ -332,7 +332,8 @@ function playingHcp(e,comp){
   const idx=Number(e.index)||0;
   if(comp.format==="scramble")return Math.round(idx);
   const c=comp.course;
-  const ch=Math.round(idx*(Number(c.slope)||113)/113+((Number(c.rating)||coursePar(c))-coursePar(c)));
+  /* WHS (2024): the allowance is applied to the unrounded course handicap, then rounded once (matches Golf NZ). */
+  const ch=idx*(Number(c.slope)||113)/113+((Number(c.rating)||coursePar(c))-coursePar(c));
   return Math.round(ch*(Number(comp.allowance)||100)/100);
 }
 function holeStrokes(ph,si){
@@ -902,7 +903,7 @@ function renderSetup(tab,comp){
     if(team)h+='<label class="f">Pair name<input id="e-team" placeholder="Same name for both partners" autocomplete="off"></label>';
     if(scr)h+='<label class="f">Players<input id="e-members" placeholder="Names, comma separated" autocomplete="off"></label>';
     h+='</div><div class="row"><button class="primary" type="submit" id="eSubmit">Add</button><button type="button" class="ghost" id="eCancel" hidden>Cancel</button><span class="err" id="eErr"></span></div>';
-    h+='<p class="note" style="margin:0">'+(scr?"Enter the team's playing handicap directly.":"Playing handicap = handicap index × slope ÷ 113 + (course rating − par), rounded, then × "+esc(comp.allowance)+"% allowance. Write a plus handicap as +1.2.")+'</p></form>';
+    h+='<p class="note" style="margin:0">'+(scr?"Enter the team's playing handicap directly.":"Playing handicap = (handicap index × slope ÷ 113 + (course rating − par)) × "+esc(comp.allowance)+"% allowance, rounded once at the end, as Golf NZ does. Write a plus handicap as +1.2.")+'</p></form>';
   }
   h+='</div>';
   if(canAdmin()){
