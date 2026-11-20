@@ -448,6 +448,9 @@ function holeWord(g,par){
 
 /* ---------- data ---------- */
 function curComp(){if(S.compId==="sample")return SAMPLE;return S.comps.find(c=>c.id===S.compId)||null}
+/* Hidden competitions (comp.hidden) are left off the list and closed to everyone except organisers.
+   App-only, like the freeze: the data itself is still publicly readable. */
+function hiddenFromMe(c){return !!(c&&c.hidden)&&!canAdmin()}
 function curEntries(){if(S.compId==="sample")return SAMPLE_ENTRIES;return S.entries[S.compId]||[]}
 let compsUnsub=null,entriesUnsub=null,entriesFor=null;
 function subscribeComps(){
@@ -500,7 +503,7 @@ function activeShouts(comp){
 }
 function renderShouts(){
   const box=$("#shouts");if(!box)return;
-  const comp=S.view==="comp"?curComp():null;
+  let comp=S.view==="comp"?curComp():null;if(hiddenFromMe(comp))comp=null;
   if(!comp){box.innerHTML="";box.dataset.html="";return}
   const html=activeShouts(comp).map(x=>'<div class="shout" role="status"><span class="w">'+esc(holeWord(x.v,x.par))+'</span><span class="d"><b>'+esc(dispName(x.e,comp))+'</b> made '+x.v+' on hole '+x.hole+' (par '+x.par+')</span><button class="x" data-shout-x="'+esc(x.s.id)+'" aria-label="Dismiss" title="Dismiss">×</button></div>').join("");
   if(box.dataset.html!==html){box.innerHTML=html;box.dataset.html=html}/* unchanged banners don't re-animate */
@@ -623,8 +626,9 @@ function render(fromSnapshot){
   if(S.view==="home")return renderHome(app);
   if(S.view==="new")return fromSnapshot?null:renderCompForm(app,null);
   const comp=curComp();
+  if(hiddenFromMe(comp)){app.innerHTML='<div class="panel empty stack"><h2>This competition isn\'t public</h2><p class="muted">The organiser has hidden it for now.</p><div><a class="btn" href="#home">All competitions</a></div></div>';return}
   if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">All competitions</a></div></div>':'<p class="muted">Loading competition…</p>';return}
-  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const fb=$("#freezeBox");if(fb&&!(document.activeElement&&document.activeElement.id==="fz-after"))fb.outerHTML=freezePanel(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
+  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const fb=$("#freezeBox");if(fb&&!(document.activeElement&&document.activeElement.id==="fz-after"))fb.outerHTML=freezePanel(comp);const vb=$("#visBox");if(vb)vb.outerHTML=visibilityPanel(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
   if(fromSnapshot&&document.activeElement&&document.activeElement.id==="j-code")return;/* don't wipe a code being typed */
   renderComp(app,comp);
 }
@@ -638,12 +642,12 @@ function renderHome(app){
   if(S.compsSlow)h+='<div class="banner">Competitions can\'t be reached yet. Check your connection; this page keeps trying.</div>';
   if(S.authUser&&!S.authUser.isAnonymous&&!S.isAdmin)h+='<div class="banner stack" style="gap:6px"><div>You\'re signed in as <b>'+esc(S.authUser.displayName||S.authUser.email||"this account")+'</b>, which isn\'t an organiser yet. To become one, send this account ID to whoever runs Tussock Scoring:</div><div class="uid">'+esc(S.authUser.uid)+'</div></div>';
   h+='<div class="comps">';
-  S.comps.forEach(c=>{
-    const n=(S.entries[c.id]||[]).length;
-    h+='<a class="btn comp-card" href="#c-'+esc(c.id)+'"><span class="eyebrow">'+esc(fmtDate(c.date))+(codeOf(c)?' <span class="code">'+esc(codeOf(c))+'</span>':'')+'</span><span class="t">'+esc(c.name)+'</span><span class="muted">'+esc(FORMATS[c.format]?FORMATS[c.format].label:c.format)+' · '+esc(c.course.name||"Course")+'</span></a>';
+  const list=S.comps.filter(c=>!hiddenFromMe(c));
+  list.forEach(c=>{
+    h+='<a class="btn comp-card" href="#c-'+esc(c.id)+'"><span class="eyebrow">'+esc(fmtDate(c.date))+(codeOf(c)?' <span class="code">'+esc(codeOf(c))+'</span>':'')+(c.hidden?' <span class="pill warn">Hidden</span>':'')+'</span><span class="t">'+esc(c.name)+'</span><span class="muted">'+esc(FORMATS[c.format]?FORMATS[c.format].label:c.format)+' · '+esc(c.course.name||"Course")+'</span></a>';
   });
   h+='</div>';
-  if(S.db&&S.compsLoaded&&!S.comps.length){
+  if(S.db&&S.compsLoaded&&!list.length){
     h+='<div class="panel empty stack"><h2>No competitions yet</h2><p class="muted" style="max-width:60ch">Set up the course card and format, add the field with their handicap indexes, then share this page and the competition code. Each group enters its own scores and the leaderboard updates for everyone.</p>'+(canAdmin()?'<div><a class="btn primary" href="#new">Set up the first competition</a></div>':'')+'</div>';
   }
   h+='<div class="panel stack"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">Try it</div><h3>Sample medal round</h3></div><a class="btn" href="#c-sample">Open sample</a></div><p class="note">Five made-up players on a par-72 card. Changes to the sample stay on your screen and aren\'t saved.</p></div>';
@@ -742,6 +746,17 @@ function freezePanel(comp){
   else h+='<div><span class="pill">Results revealed</span></div><p class="note" style="margin:0">Everyone can see all 18 holes.</p><div class="row" style="align-items:flex-end">'+hole+'<button type="button" data-freeze="on">Freeze again</button></div>';
   h+='<span class="err" id="fzErr" role="alert"></span></div>';
   return h;
+}
+/* Organiser panel on Field & course: show or hide the competition. Saves straight away. */
+function visibilityPanel(comp){
+  if(comp.local)return "";
+  const hid=!!comp.hidden;
+  return '<div class="panel stack" id="visBox"><div><h2>Visibility</h2><p class="note" style="margin:4px 0 0">'+(hid
+    ?'<span class="pill warn">Hidden</span> Only organisers can see this competition. It\'s left off the competitions list, and the link shows "isn\'t public" to everyone else, scorers included.'
+    :'<span class="pill">Public</span> Anyone with the link can follow it, and it\'s on the competitions list. Hide it to keep it to organisers only, e.g. while testing or setting up.')+'</p></div><div class="row"><button type="button" class="'+(hid?"primary":"")+'" data-vis="'+(hid?"show":"hide")+'">'+(hid?"Make public":"Hide from public")+'</button></div></div>';
+}
+async function setHidden(comp,hidden){
+  try{await S.db.doc("comps/"+comp.id).update({hidden});toast(hidden?comp.name+" is now hidden from the public.":comp.name+" is public again.")}catch(err){writeErr(err)}
 }
 async function setFreeze(comp,freeze){
   if(comp.local){SAMPLE.freeze=freeze;render();return}
@@ -907,6 +922,7 @@ function renderSetup(tab,comp){
   }
   h+='</div>';
   if(canAdmin()){
+    h+=visibilityPanel(comp);
     h+=freezePanel(comp);
     h+='<div class="panel stack"><h2>Competition &amp; course</h2><div id="cform-host"></div></div>';
   }else h+=courseView(comp);
@@ -1233,6 +1249,7 @@ document.addEventListener("click",ev=>{
     return;
   }
   if(t.dataset.freeze&&comp&&canAdmin()){freezeAction(comp,t.dataset.freeze);return}
+  if(t.dataset.vis&&comp&&!comp.local&&canAdmin()){setHidden(comp,t.dataset.vis==="hide");return}
   if(t.dataset.shoutX&&comp){dismissShout(comp,t.dataset.shoutX);return}
   if(t.dataset.hole&&comp){const was=S.hole;S.hole=+t.dataset.hole;if(was!==S.hole)announceHole(comp,was);LS.set("hole:"+comp.id,S.hole);render();return}
   if((t.dataset.step||t.dataset.pick)&&comp&&canScore(comp)){

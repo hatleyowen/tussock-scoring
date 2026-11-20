@@ -32,6 +32,10 @@ A stroke play or Stableford competition can also run a **pairs competition** off
 
 Organisers can freeze the leaderboard after a chosen hole (default 15) under *Field & course → Leaderboard freeze*, so the winner stays a surprise until the prizegiving. While frozen, everyone except organisers sees the leaderboards, scorecards and stats only up to that hole, and no birdie banners are sent for the later holes. Scoring carries on as normal. Organisers see the full results (with a *Preview players' view* switch) and press **Reveal results** at the prizegiving, which updates every screen at once. This is app-only: the scores are still in the public database. Stored on the competition as `freeze: {on, after, revealed}`.
 
+### Hiding a competition
+
+Organisers can hide a competition under *Field & course → Visibility* (for example a test round, or one still being set up). A hidden competition is left off the competitions list, and its link shows "This competition isn't public" to everyone except organisers, scorers included. Organisers still see it, marked *Hidden*. **Make public** reverses it. Like the freeze, this is app-only: the data is still in the public database. Stored on the competition as `hidden: true`.
+
 ## Rules implemented
 
 - **Playing handicap (WHS):** `round((index × slope / 113 + (course rating − par)) × allowance)`. The allowance is applied to the unrounded course handicap and the result is rounded once, as in the 2024 WHS rules and Golf NZ. Default allowances: 95% individual, 85% better-ball, 95% combined Stableford pairs. Plus handicaps give strokes back from stroke index 18 upwards.
