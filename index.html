@@ -515,7 +515,7 @@ function myCard(comp){
   return g.map(id=>entries.find(e=>e.id===id)).filter(Boolean);
 }
 function announceHole(comp,hole){
-  if(!comp||!canScore(comp)||!(hole>=1&&hole<=18))return;
+  if(!comp||!canEdit(comp)||!(hole>=1&&hole<=18))return;
   const fz=freezeAfter(comp);if(fz&&hole>fz)return;/* frozen holes don't get banners, now or after the reveal */
   const par=comp.course.pars[hole-1];
   const sentKey="shouted:"+comp.id,sent=comp.local?[]:(LS.get(sentKey)||[]);/* the sample's shouts live in memory only */
@@ -561,6 +561,9 @@ async function flush(cid,pid){
    competition's code can only enter scores in it. The sample round is editable on-screen by anyone. */
 function canAdmin(){return S.compId==="sample"||(!!S.db&&S.isAdmin)}
 function canScore(comp){if(!comp)return false;if(comp.local)return true;return !!S.db&&(S.isAdmin||!!S.joined[comp.id])}
+/* Can this phone change scores right now? Once an organiser locks scoring (comp.locked), only organisers can.
+   The database rules enforce the same thing. */
+function canEdit(comp){return canScore(comp)&&(!(comp&&comp.locked)||canAdmin())}
 /* Until a phone has unlocked scoring for a competition (or is an organiser), players are shown as
    "First L." and NZ Golf numbers are hidden. Team names in a scramble are left as they are. */
 function canSeeDetails(comp){return !!comp&&(comp.local||canScore(comp))}
@@ -628,7 +631,7 @@ function render(fromSnapshot){
   const comp=curComp();
   if(hiddenFromMe(comp)){app.innerHTML='<div class="panel empty stack"><h2>This competition isn\'t public</h2><p class="muted">The organiser has hidden it for now.</p><div><a class="btn" href="#home">All competitions</a></div></div>';return}
   if(!comp){app.innerHTML=S.compsLoaded||!S.db?'<div class="panel empty stack"><h2>Competition not found</h2><p class="muted">It may have been deleted, or the link is incomplete.</p><div><a class="btn" href="#home">All competitions</a></div></div>':'<p class="muted">Loading competition…</p>';return}
-  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const fb=$("#freezeBox");if(fb&&!(document.activeElement&&document.activeElement.id==="fz-after"))fb.outerHTML=freezePanel(comp);const vb=$("#visBox");if(vb)vb.outerHTML=visibilityPanel(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
+  if(S.tab==="setup"&&fromSnapshot&&document.getElementById("setup-root")){renderEntryList(comp);const fb=$("#freezeBox");if(fb&&!(document.activeElement&&document.activeElement.id==="fz-after"))fb.outerHTML=freezePanel(comp);const vb=$("#visBox");if(vb)vb.outerHTML=visibilityPanel(comp);const lb=$("#lockBox");if(lb)lb.outerHTML=lockPanel(comp);const cv=$("#courseView");if(cv)cv.outerHTML=courseView(comp);return}
   if(fromSnapshot&&document.activeElement&&document.activeElement.id==="j-code")return;/* don't wipe a code being typed */
   renderComp(app,comp);
 }
@@ -692,7 +695,7 @@ function renderBoard(tab,comp){
   const hid=lateHidden(comp);
   h+=freezeNotice(comp);
   h+='<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row">';
-  h+=hid?'<span class="pill warn">Frozen after hole '+hid+'</span>':started&&done<rows.length?'<span class="pill live">Live</span>':done===rows.length?'<span class="pill">Final</span>':'<span class="pill warn">Not started</span>';
+  h+=hid?'<span class="pill warn">Frozen after hole '+hid+'</span>':comp.locked?'<span class="pill">Scoring closed</span>':started&&done<rows.length?'<span class="pill live">Live</span>':done===rows.length?'<span class="pill">Final</span>':'<span class="pill warn">Not started</span>';
   h+='<span class="note">'+(hid?'Showing holes 1–'+hid:done+' of '+rows.length+' '+(isPairs?"pairs":comp.format==="scramble"?"teams":"cards")+' complete');
   if(kind==="team"){const unp=entries.filter(e=>!(e.team||"").trim()).length;h+=(unp?' · '+unp+' player'+(unp===1?'':'s')+' not in a pair':'')}
   h+='</span></div>';
@@ -754,6 +757,17 @@ function visibilityPanel(comp){
   return '<div class="panel stack" id="visBox"><div><h2>Visibility</h2><p class="note" style="margin:4px 0 0">'+(hid
     ?'<span class="pill warn">Hidden</span> Only organisers can see this competition. It\'s left off the competitions list, and the link shows "isn\'t public" to everyone else, scorers included.'
     :'<span class="pill">Public</span> Anyone with the link can follow it, and it\'s on the competitions list. Hide it to keep it to organisers only, e.g. while testing or setting up.')+'</p></div><div class="row"><button type="button" class="'+(hid?"primary":"")+'" data-vis="'+(hid?"show":"hide")+'">'+(hid?"Make public":"Hide from public")+'</button></div></div>';
+}
+/* Organiser panel on Field & course: lock scoring so only organisers can change anything. Saves straight away. */
+function lockPanel(comp){
+  if(comp.local)return "";
+  const on=!!comp.locked;
+  return '<div class="panel stack" id="lockBox"><div><h2>Lock scoring</h2><p class="note" style="margin:4px 0 0">'+(on
+    ?'<span class="pill warn">Locked</span> Markers can\'t enter or change scores; only organisers can. Everyone can still see the leaderboard.'
+    :'<span class="pill">Open</span> Markers with the competition code can enter and change scores. Lock it when the round is over so the results can\'t change.')+'</p></div><div class="row"><button type="button" class="'+(on?"":"primary")+'" data-lock="'+(on?"off":"on")+'">'+(on?"Unlock scoring":"Lock scoring")+'</button></div></div>';
+}
+async function setLocked(comp,locked){
+  try{await S.db.doc("comps/"+comp.id).update({locked});toast(locked?"Scoring locked for "+comp.name+". Only organisers can change scores now.":"Scoring unlocked for "+comp.name+".")}catch(err){writeErr(err)}
 }
 async function setHidden(comp,hidden){
   try{await S.db.doc("comps/"+comp.id).update({hidden});toast(hidden?comp.name+" is now hidden from the public.":comp.name+" is public again.")}catch(err){writeErr(err)}
@@ -865,7 +879,8 @@ function renderScore(tab,comp){
     h+='</div>';
   }
   h+='</div></details>';
-  if(!canScore(comp)){
+  if(comp.locked)h+='<div class="banner"><b>Scoring is closed.</b> '+(canAdmin()?'You can still change scores as an organiser. Unlock scoring under Field &amp; course to let markers edit again.':'The organiser has locked this competition, so scores can no longer be changed.')+'</div>';
+  else if(!canScore(comp)){
     h+='<div class="panel stack"><div><div class="eyebrow">Unlock scoring</div><h3>Enter the competition code</h3><p class="note" style="margin:2px 0 0">Ask the organiser for the code. You only need to enter it once on this phone.</p></div>';
     if(!S.db)h+='<p class="note" style="margin:0">Scoring needs a connection. Check your signal and reload.</p>';
     else h+='<form id="jform" class="join" novalidate><label class="f">Competition code<input id="j-code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" value="'+esc(S.joinCode||"")+'"></label><button class="primary" type="submit" id="jSubmit"'+(S.joinBusy?" disabled":"")+'>'+(S.joinBusy?"Checking…":"Unlock")+'</button></form><span class="err" id="jErr" role="alert">'+esc(S.joinErr&&S.joinErr[comp.id]||"")+'</span>';
@@ -879,7 +894,7 @@ function renderScore(tab,comp){
     sel.forEach(e=>{
       const ev=evalEntry(e,comp),H=ev.holes[i],v=H.g;
       h+='<div class="prow"><div class="who"><div class="n">'+esc(scoreName(e,comp))+(H.rec?' <span class="dots" title="Strokes received on this hole">'+(H.rec>0?"•".repeat(H.rec):"+"+(-H.rec))+'</span>':'')+'</div></div>';
-      const dis=canScore(comp)?"":" disabled";
+      const dis=canEdit(comp)?"":" disabled";
       h+='<div class="ctl"><div class="stepper"><button data-step="-1" data-e="'+esc(e.id)+'" aria-label="One fewer stroke for '+esc(dispName(e,comp))+'"'+dis+'>−</button><span class="val" aria-live="polite"'+(v!=null&&v!=="P"?' aria-label="'+v+', '+esc(holeWord(v,H.par))+'"':'')+'>'+(v==null?'<span class="muted">–</span>':mark(v,H.par))+'</span><button data-step="1" data-e="'+esc(e.id)+'" aria-label="One more stroke for '+esc(dispName(e,comp))+'"'+dis+'>+</button><button class="pk" data-pick="'+esc(e.id)+'" aria-label="Clear score for '+esc(dispName(e,comp))+'"'+(v==null?" disabled":dis)+'>Clear</button></div>'+ptsLine(ev,H,comp)+'</div></div>';
     });
     h+='<p class="note" style="margin:0">The first tap of + enters par. Clear removes a score.</p></div></div>';
@@ -922,6 +937,7 @@ function renderSetup(tab,comp){
   }
   h+='</div>';
   if(canAdmin()){
+    h+=lockPanel(comp);
     h+=visibilityPanel(comp);
     h+=freezePanel(comp);
     h+='<div class="panel stack"><h2>Competition &amp; course</h2><div id="cform-host"></div></div>';
@@ -1250,9 +1266,10 @@ document.addEventListener("click",ev=>{
   }
   if(t.dataset.freeze&&comp&&canAdmin()){freezeAction(comp,t.dataset.freeze);return}
   if(t.dataset.vis&&comp&&!comp.local&&canAdmin()){setHidden(comp,t.dataset.vis==="hide");return}
+  if(t.dataset.lock&&comp&&!comp.local&&canAdmin()){setLocked(comp,t.dataset.lock==="on");return}
   if(t.dataset.shoutX&&comp){dismissShout(comp,t.dataset.shoutX);return}
   if(t.dataset.hole&&comp){const was=S.hole;S.hole=+t.dataset.hole;if(was!==S.hole)announceHole(comp,was);LS.set("hole:"+comp.id,S.hole);render();return}
-  if((t.dataset.step||t.dataset.pick)&&comp&&canScore(comp)){
+  if((t.dataset.step||t.dataset.pick)&&comp&&canEdit(comp)){
     const id=t.dataset.e||t.dataset.pick,e=curEntries().find(x=>x.id===id);if(!e)return;
     const par=comp.course.pars[S.hole-1],cur=scoreAt(e,S.hole);
     let v;

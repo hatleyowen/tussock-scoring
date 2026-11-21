@@ -6,7 +6,8 @@ rules_version = '2';
 //  - Players unlock score entry for one competition by entering its join code. The code lives in
 //    /secrets, which only organisers can read; joining creates /comps/{id}/members/{uid} and is
 //    only allowed when the code they send matches.
-//  - Joined players can change the `scores` field on player entries in that competition, nothing else.
+//  - Joined players can change the `scores` field on player entries in that competition, nothing else,
+//    and only while the competition isn't locked (`locked: true` on the competition, set by an organiser).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -16,6 +17,10 @@ service cloud.firestore {
     }
     function isMember(compId) {
       return signedIn() && exists(/databases/$(database)/documents/comps/$(compId)/members/$(request.auth.uid));
+    }
+    // An organiser has locked scoring on this competition (comps/{id}.locked == true).
+    function isLocked(compId) {
+      return get(/databases/$(database)/documents/comps/$(compId)).data.get('locked', false) == true;
     }
     function validScores() {
       return request.resource.data.scores is map && request.resource.data.scores.size() <= 18;
@@ -41,6 +46,7 @@ service cloud.firestore {
         allow create, delete: if isAdmin();
         allow update: if isAdmin()
           || (isMember(compId)
+              && !isLocked(compId)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scores'])
               && validScores());
       }
@@ -51,6 +57,7 @@ service cloud.firestore {
         allow read: if true;
         allow create: if isAdmin()
           || (isMember(compId)
+              && !isLocked(compId)
               && request.resource.data.keys().hasOnly(['pid', 'hole', 'score', 'par', 'at', 'dismissed'])
               && request.resource.data.pid is string
               && request.resource.data.hole is int

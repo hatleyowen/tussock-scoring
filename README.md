@@ -32,6 +32,10 @@ A stroke play or Stableford competition can also run a **pairs competition** off
 
 Organisers can freeze the leaderboard after a chosen hole (default 15) under *Field & course → Leaderboard freeze*, so the winner stays a surprise until the prizegiving. While frozen, everyone except organisers sees the leaderboards, scorecards and stats only up to that hole, and no birdie banners are sent for the later holes. Scoring carries on as normal. Organisers see the full results (with a *Preview players' view* switch) and press **Reveal results** at the prizegiving, which updates every screen at once. This is app-only: the scores are still in the public database. Stored on the competition as `freeze: {on, after, revealed}`.
 
+### Locking scoring
+
+When the round is over, organisers can press **Lock scoring** under *Field & course* so the results can't change. Markers can no longer enter or change scores (or send birdie banners); only organisers can. Everyone can still see the leaderboard, which shows *Scoring closed*. **Unlock scoring** reverses it. Unlike the freeze and hiding, this is enforced by the database rules as well as the app (`locked: true` on the competition), so `firestore.rules` must be published for it to take full effect.
+
 ### Hiding a competition
 
 Organisers can hide a competition under *Field & course → Visibility* (for example a test round, or one still being set up). A hidden competition is left off the competitions list, and its link shows "This competition isn't public" to everyone except organisers, scorers included. Organisers still see it, marked *Hidden*. **Make public** reverses it. Like the freeze, this is app-only: the data is still in the public database. Stored on the competition as `hidden: true`.
